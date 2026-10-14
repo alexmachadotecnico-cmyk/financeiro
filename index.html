@@ -68,7 +68,7 @@
             </select>
           </div>
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Valor (R$)</label>
+            <label class="text-xs text-slate-400 block mb-1">Valor Previsto (R$)</label>
             <input type="number" step="0.01" id="novo-valor" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
           </div>
         </div>
@@ -82,14 +82,13 @@
   </div>
 
   <script>
-    // URL do Web App gerada no Google Apps Script (terminada em /exec)
-    const URL_DO_WEB_APP = "SUA_URL_DO_WEB_APP_AQUI";
+    // URL do Web App fixada permanentemente
+    const URL_DO_WEB_APP = "https://script.google.com/macros/s/AKfycbzNdp_jDA9za0m-jg_N1-IOjzZKDnSKnm22427gleTSKJLtXKPU1_mHYsU0emJKVTn_UQ/exec";
 
     function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
     function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
 
     async function carregarDados() {
-      if (URL_DO_WEB_APP.includes("SUA_URL")) return;
       try {
         const resposta = await fetch(URL_DO_WEB_APP);
         const dados = await resposta.json();
@@ -103,14 +102,14 @@
         dados.compromissos.forEach(item => {
           let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
           
-          let valorFinal = (valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
+          let isRealizado = status.includes('PAGO') || status.includes('RECEBIDO');
+          let valorExibido = (isRealizado && valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
           
-          if (tipo === 'ENTRADA') totalEntradas += valorFinal;
-          if (tipo === 'SAIDA') totalSaidas += valorFinal;
+          if (tipo === 'ENTRADA') totalEntradas += valorExibido;
+          if (tipo === 'SAIDA') totalSaidas += valorExibido;
 
-          let isPago = status === 'PAGO' || status === 'RECEBIDO';
-          let corStatus = isPago ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-          let textoStatus = isPago ? (tipo === 'ENTRADA' ? 'RECEBIDO' : 'PAGO') : 'PENDENTE';
+          let corStatus = isRealizado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
+          let textoStatus = status !== "" ? status : 'PENDENTE';
           let corValor = tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400';
 
           container.innerHTML += `
@@ -120,7 +119,7 @@
                 <span class="text-[11px] text-slate-400">Vencimento: Dia ${dia}</span>
               </div>
               <div class="text-right">
-                <span class="block text-sm font-bold ${corValor}">R$ ${valorFinal.toFixed(2)}</span>
+                <span class="block text-sm font-bold ${corValor}">R$ ${valorExibido.toFixed(2)}</span>
                 <span class="text-[10px] ${corStatus} px-2 py-0.5 rounded font-medium">${textoStatus}</span>
               </div>
             </div>
@@ -131,6 +130,7 @@
         document.getElementById('total-saidas').innerText = `R$ ${totalSaidas.toFixed(2)}`;
       } catch (e) {
         console.error("Erro ao carregar dados:", e);
+        document.getElementById('lista-compromissos').innerHTML = '<div class="text-center py-4 text-rose-400 text-sm">Erro ao carregar dados da API.</div>';
       }
     }
 
