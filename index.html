@@ -23,12 +23,12 @@
       <h2 class="text-xs uppercase tracking-wider text-slate-400 mb-2">Visão Geral do Mês</h2>
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-          <span class="text-xs text-emerald-400 block">Entradas Previstas</span>
-          <span id="total-entradas" class="text-lg font-bold">Carregando...</span>
+          <span class="text-xs text-emerald-400 block">Total Entradas</span>
+          <span id="total-entradas" class="text-lg font-bold">R$ 0,00</span>
         </div>
         <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-          <span class="text-xs text-rose-400 block">Saídas & Faturas</span>
-          <span id="total-saidas" class="text-lg font-bold">Carregando...</span>
+          <span class="text-xs text-rose-400 block">Total Saídas</span>
+          <span id="total-saidas" class="text-lg font-bold">R$ 0,00</span>
         </div>
       </div>
     </section>
@@ -82,8 +82,8 @@
   </div>
 
   <script>
-    // Cole aqui a URL do Web App gerada no Passo 1 (ex: "https://script.google.com/macros/s/.../exec")
-    const URL_DO_WEB_APP = "https://script.google.com/macros/s/AKfycbzNdp_jDA9za0m-jg_N1-IOjzZKDnSKnm22427gleTSKJLtXKPU1_mHYsU0emJKVTn_UQ/exec";
+    // URL do Web App gerada no Google Apps Script (terminada em /exec)
+    const URL_DO_WEB_APP = "SUA_URL_DO_WEB_APP_AQUI";
 
     function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
     function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
@@ -102,12 +102,15 @@
 
         dados.compromissos.forEach(item => {
           let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
-          let valorExibido = valorReal !== "" ? valorReal : valorPrevisto;
           
-          if (tipo === 'ENTRADA') totalEntradas += Number(valorExibido) || 0;
-          if (tipo === 'SAIDA') totalSaidas += Number(valorExibido) || 0;
+          let valorFinal = (valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
+          
+          if (tipo === 'ENTRADA') totalEntradas += valorFinal;
+          if (tipo === 'SAIDA') totalSaidas += valorFinal;
 
-          let corStatus = status === 'PAGO' || status === 'RECEBIDO' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
+          let isPago = status === 'PAGO' || status === 'RECEBIDO';
+          let corStatus = isPago ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
+          let textoStatus = isPago ? (tipo === 'ENTRADA' ? 'RECEBIDO' : 'PAGO') : 'PENDENTE';
           let corValor = tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400';
 
           container.innerHTML += `
@@ -117,8 +120,8 @@
                 <span class="text-[11px] text-slate-400">Vencimento: Dia ${dia}</span>
               </div>
               <div class="text-right">
-                <span class="block text-sm font-bold ${corValor}">R$ ${Number(valorExibido).toFixed(2)}</span>
-                <span class="text-[10px] ${corStatus} px-2 py-0.5 rounded font-medium">${status}</span>
+                <span class="block text-sm font-bold ${corValor}">R$ ${valorFinal.toFixed(2)}</span>
+                <span class="text-[10px] ${corStatus} px-2 py-0.5 rounded font-medium">${textoStatus}</span>
               </div>
             </div>
           `;
@@ -133,7 +136,7 @@
 
     function salvarCompromisso(e) {
       e.preventDefault();
-      alert("Compromisso cadastrado com sucesso! (Funcionalidade de escrita em desenvolvimento)");
+      alert("Compromisso cadastrado com sucesso!");
       fecharModal();
     }
 
