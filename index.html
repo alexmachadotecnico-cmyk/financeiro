@@ -12,7 +12,12 @@
   <header class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50 shadow-md">
     <div class="max-w-md mx-auto flex justify-between items-center">
       <h1 class="text-lg font-bold text-emerald-400">💰 Finanças Pessoais</h1>
-      <span id="mes-atual" class="text-xs bg-slate-700 px-2.5 py-1 rounded-full text-slate-300">Outubro/2026</span>
+      <!-- Seletor de Mês / Prospecção -->
+      <select id="filtro-mes" onchange="renderizarDados()" class="bg-slate-700 text-xs text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-600 focus:outline-none">
+        <option value="10/2026" selected>Outubro/2026</option>
+        <option value="11/2026">Novembro/2026</option>
+        <option value="12/2026">Dezembro/2026</option>
+      </select>
     </div>
   </header>
 
@@ -33,7 +38,15 @@
       </div>
     </section>
 
-    <!-- Seção de Contas Fixas e Baixas Automáticas -->
+    <!-- Faturas de Cartão de Crédito -->
+    <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow">
+      <h2 class="text-sm font-semibold text-slate-200 mb-2">💳 Faturas de Cartão</h2>
+      <div id="lista-faturas" class="space-y-2">
+        <div class="text-xs text-slate-400">A carregar faturas...</div>
+      </div>
+    </section>
+
+    <!-- Seção de Contas Fixas e Compromissos -->
     <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow">
       <div class="flex justify-between items-center mb-3">
         <h2 class="text-sm font-semibold text-slate-200">Compromissos do Mês</h2>
@@ -47,7 +60,7 @@
 
   </main>
 
-  <!-- Modal Cadastro Manual -->
+  <!-- Modal Cadastro Manual com Parcelamento -->
   <div id="modal-cadastro" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center">
@@ -68,22 +81,28 @@
             </select>
           </div>
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Valor Previsto (R$)</label>
+            <label class="text-xs text-slate-400 block mb-1">Valor Total (R$)</label>
             <input type="number" step="0.01" id="novo-valor" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
           </div>
         </div>
-        <div>
-          <label class="text-xs text-slate-400 block mb-1">Dia do Vencimento</label>
-          <input type="number" id="novo-dia" min="1" max="31" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Dia do Vencimento</label>
+            <input type="number" id="novo-dia" min="1" max="31" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Qtd Parcelas</label>
+            <input type="number" id="novo-parcelas" min="1" max="48" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+          </div>
         </div>
-        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg transition text-sm">Salvar Compromisso</button>
+        <button type="submit" id="btn-salvar" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg transition text-sm">Salvar Compromisso</button>
       </form>
     </div>
   </div>
 
   <script>
-    // URL do Web App fixada permanentemente
     const URL_DO_WEB_APP = "https://script.google.com/macros/s/AKfycbzNdp_jDA9za0m-jg_N1-IOjzZKDnSKnm22427gleTSKJLtXKPU1_mHYsU0emJKVTn_UQ/exec";
+    let dadosGlobais = { compromissos: [], faturas: [] };
 
     function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
     function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
@@ -91,53 +110,101 @@
     async function carregarDados() {
       try {
         const resposta = await fetch(URL_DO_WEB_APP);
-        const dados = await resposta.json();
-        
-        let container = document.getElementById('lista-compromissos');
-        container.innerHTML = '';
-        
-        let totalEntradas = 0;
-        let totalSaidas = 0;
-
-        dados.compromissos.forEach(item => {
-          let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
-          
-          let isRealizado = status.includes('PAGO') || status.includes('RECEBIDO');
-          let valorExibido = (isRealizado && valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
-          
-          if (tipo === 'ENTRADA') totalEntradas += valorExibido;
-          if (tipo === 'SAIDA') totalSaidas += valorExibido;
-
-          let corStatus = isRealizado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-          let textoStatus = status !== "" ? status : 'PENDENTE';
-          let corValor = tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400';
-
-          container.innerHTML += `
-            <div class="bg-slate-900/40 p-3 rounded-xl border border-slate-700/40 flex justify-between items-center">
-              <div>
-                <p class="text-sm font-medium text-white">${compromisso}</p>
-                <span class="text-[11px] text-slate-400">Vencimento: Dia ${dia}</span>
-              </div>
-              <div class="text-right">
-                <span class="block text-sm font-bold ${corValor}">R$ ${valorExibido.toFixed(2)}</span>
-                <span class="text-[10px] ${corStatus} px-2 py-0.5 rounded font-medium">${textoStatus}</span>
-              </div>
-            </div>
-          `;
-        });
-
-        document.getElementById('total-entradas').innerText = `R$ ${totalEntradas.toFixed(2)}`;
-        document.getElementById('total-saidas').innerText = `R$ ${totalSaidas.toFixed(2)}`;
+        dadosGlobais = await resposta.json();
+        renderizarDados();
       } catch (e) {
         console.error("Erro ao carregar dados:", e);
-        document.getElementById('lista-compromissos').innerHTML = '<div class="text-center py-4 text-rose-400 text-sm">Erro ao carregar dados da API.</div>';
       }
     }
 
-    function salvarCompromisso(e) {
+    function renderizarDados() {
+      let containerComp = document.getElementById('lista-compromissos');
+      let containerFat = document.getElementById('lista-faturas');
+      containerComp.innerHTML = '';
+      containerFat.innerHTML = '';
+
+      let totalEntradas = 0;
+      let totalSaidas = 0;
+
+      // Renderiza Compromissos
+      dadosGlobais.compromissos.forEach(item => {
+        let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
+        let isRealizado = status.includes('PAGO') || status.includes('RECEBIDO');
+        let valorExibido = (isRealizado && valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
+        
+        if (tipo === 'ENTRADA') totalEntradas += valorExibido;
+        if (tipo === 'SAIDA') totalSaidas += valorExibido;
+
+        let corStatus = isRealizado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
+        let textoStatus = status !== "" ? status : 'PENDENTE';
+        let corValor = tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400';
+
+        containerComp.innerHTML += `
+          <div class="bg-slate-900/40 p-3 rounded-xl border border-slate-700/40 flex justify-between items-center">
+            <div>
+              <p class="text-sm font-medium text-white">${compromisso}</p>
+              <span class="text-[11px] text-slate-400">Vencimento: Dia ${dia}</span>
+            </div>
+            <div class="text-right">
+              <span class="block text-sm font-bold ${corValor}">R$ ${valorExibido.toFixed(2)}</span>
+              <span class="text-[10px] ${corStatus} px-2 py-0.5 rounded font-medium">${textoStatus}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      // Renderiza Faturas
+      if (dadosGlobais.faturas.length === 0) {
+        containerFat.innerHTML = '<div class="text-xs text-slate-400">Nenhuma fatura de cartão registada.</div>';
+      } else {
+        dadosGlobais.faturas.forEach(fat => {
+          let [cartao, vencimento, valorTotal, minimo, estado] = fat;
+          totalSaidas += Number(valorTotal) || 0;
+          containerFat.innerHTML += `
+            <div class="bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/40 flex justify-between items-center text-xs">
+              <div>
+                <span class="font-medium text-white block">${cartao}</span>
+                <span class="text-slate-400">Vencimento: ${vencimento}</span>
+              </div>
+              <span class="font-bold text-rose-400">R$ ${Number(valorTotal).toFixed(2)}</span>
+            </div>
+          `;
+        });
+      }
+
+      document.getElementById('total-entradas').innerText = `R$ ${totalEntradas.toFixed(2)}`;
+      document.getElementById('total-saidas').innerText = `R$ ${totalSaidas.toFixed(2)}`;
+    }
+
+    async function salvarCompromisso(e) {
       e.preventDefault();
-      alert("Compromisso cadastrado com sucesso!");
-      fecharModal();
+      const btn = document.getElementById('btn-salvar');
+      btn.innerText = "A guardar...";
+      btn.disabled = true;
+
+      const payload = {
+        nome: document.getElementById('novo-nome').value,
+        tipo: document.getElementById('novo-tipo').value,
+        valor: document.getElementById('novo-valor').value,
+        dia: document.getElementById('novo-dia').value,
+        parcelas: document.getElementById('novo-parcelas').value
+      };
+
+      try {
+        await fetch(URL_DO_WEB_APP, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        fecharModal();
+        document.getElementById('form-novo').reset();
+        await carregarDados();
+        alert("Compromisso guardado com sucesso na planilha!");
+      } catch (err) {
+        alert("Erro ao guardar compromisso.");
+      } finally {
+        btn.innerText = "Salvar Compromisso";
+        btn.disabled = false;
+      }
     }
 
     carregarDados();
