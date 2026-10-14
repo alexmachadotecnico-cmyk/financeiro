@@ -45,7 +45,7 @@
       <div onclick="abrirDetalhes('despesas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-rose-500 transition">
         <span class="text-[11px] font-semibold text-rose-400 block uppercase">DESPESAS</span>
         <span id="total-saidas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
-        <span id="qtd-saidas" class="text-[10px] text-slate-400">0 FIXA(S) + FATURAS</span>
+        <span id="qtd-saidas" class="text-[10px] text-slate-400">0 FIXA(S) + FATURA</span>
       </div>
     </div>
 
@@ -53,22 +53,22 @@
     <div class="bg-gradient-to-r from-emerald-900/50 to-slate-800 border border-emerald-700/50 p-4 rounded-2xl shadow flex justify-between items-center">
       <div>
         <span class="text-xs text-emerald-300 block font-medium uppercase">SALDO LÍQUIDO PROJETADO</span>
-        <span class="text-[10px] text-slate-400 uppercase">ENTRADAS MENOS DESPESAS E FATURAS</span>
+        <span class="text-[10px] text-slate-400 uppercase">ENTRADAS MENOS DESPESAS E FATURA</span>
       </div>
       <span id="saldo-liquido" class="text-lg font-bold text-emerald-400">R$ 0,00</span>
     </div>
 
-    <!-- Faturas de Cartão (Corte Dia 07 / Vencimento Dia 14) -->
+    <!-- Fatura do Cartão do Mês Selecionado -->
     <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow space-y-3">
       <div class="flex justify-between items-center border-b border-slate-700/60 pb-2">
         <div>
           <h2 class="text-sm font-semibold text-slate-200 uppercase">FATURA DO CARTÃO (MÊS CORRENTE)</h2>
-          <span id="subtitulo-ciclo" class="text-[10px] text-slate-400 uppercase block">CICLO DE CORTE DIA 07 A DIA 06</span>
+          <span id="subtitulo-ciclo" class="text-[10px] text-slate-400 uppercase block">CICLO DE CORTE DIA 08 A DIA 07</span>
         </div>
         <span id="total-faturas" class="text-xs font-bold text-rose-400">R$ 0,00</span>
       </div>
       <div id="lista-faturas" class="space-y-3">
-        <div class="text-xs text-slate-400 text-center py-2 uppercase">A CARREGAR FATURA...</div>
+        <div class="text-xs text-slate-400 text-center py-2 uppercase">A CARREGAR FATURA DA PLANILHA...</div>
       </div>
     </section>
 
@@ -133,7 +133,7 @@
   <script>
     const URL_DO_WEB_APP = "https://script.google.com/macros/s/AKfycbzNdp_jDA9za0m-jg_N1-IOjzZKDnSKnm22427gleTSKJLtXKPU1_mHYsU0emJKVTn_UQ/exec";
     let dadosGlobais = { compromissos: [], faturas: [], transacoes: [], faturasDetalhadas: [] };
-    let mapaFaturasOrganizadas = {}; // "MM/YYYY" -> { cartao, vencimento, valorTotal, status, itens: [] }
+    let mapaFaturasPorCompetencia = {};
 
     function parseNum(v) {
       if (typeof v === 'number') return v;
@@ -155,6 +155,10 @@
         let p = s.split('/');
         return `${p[0].padStart(2, '0')}/${p[1].padStart(2, '0')}/${p[2]}`;
       }
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        let p = s.substring(0, 10).split('-');
+        return `${p[2]}/${p[1]}/${p[0]}`;
+      }
       let d = new Date(s);
       if (!isNaN(d.getTime())) {
         let dia = String(d.getUTCDate()).padStart(2, '0');
@@ -165,61 +169,41 @@
       return s;
     }
 
-    function extrairHoraTx(idTransacao) {
-      if (!idTransacao) return '';
-      const txReal = dadosGlobais.transacoes.find(t => String(t[13]).trim() === String(idTransacao).trim());
-      if (!txReal) return '';
-      const rawDate = String(txReal[0]);
-      if (rawDate.includes('T')) {
-        const d = new Date(rawDate);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        }
-      }
-      return 'CONFIRMADO VIA OPEN FINANCE';
+    function somarDiasBr(dataBr, dias) {
+      if (!dias) return dataBr;
+      const p = String(dataBr).split('/');
+      if (p.length !== 3) return dataBr;
+      const d = new Date(Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10) + dias));
+      const dia = String(d.getUTCDate()).padStart(2, '0');
+      const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const ano = d.getUTCFullYear();
+      return `${dia}/${mes}/${ano}`;
+    }
+
+    function timestampDataBr(dataBr) {
+      const p = String(dataBr).split('/');
+      return p.length === 3 ? Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10)) : 0;
+    }
+
+    function extrairInfoTransacaoReal(idTransacao) {
+      if (!idTransacao) return 'CONFIRMADO NA PLANILHA';
+      const txReal = (dadosGlobais.transacoes || []).find(t => String(t[13]).trim() === String(idTransacao).trim());
+      if (!txReal) return 'CONFIRMADO VIA OPEN FINANCE';
+      const metodo = String(txReal[9] || 'PIX').toUpperCase();
+      return `MÉTODO: ${metodo} • ID: ${String(idTransacao).substring(0, 8).toUpperCase()}`;
     }
 
     /**
-     * Constrói o mapa de faturas mês a mês (Maio/2026 a Abril/2027) usando:
-     * 1) A aba Faturas_Detalhadas (se já gerada pelo Apps Script), OU
-     * 2) O motor local de corte Dia 07 a Dia 06 + Reconstrução de Parcelas direto da aba Transações.
+     * Aplica as 4 Regras Contábeis diretamente sobre os dados da planilha Nubank_Pluggy:
+     * 1. Detecta e corrige eventual deslocamento de -1 dia do fuso UTC-4
+     * 2. Agrupa pelo ciclo real do Nubank: dia 08 (inclusive) a dia 07 do mês seguinte (inclusive)
+     * 3. Ignora "Pagamento recebido" e subtrai estornos (CREDIT)
+     * 4. Usa estritamente os lançamentos reais da aba Transações (sem duplicar parcelas)
      */
-    function processarFaturasNubank() {
-      mapaFaturasOrganizadas = {};
+    function construirFaturasDaPlanilha() {
+      mapaFaturasPorCompetencia = {};
 
-      // Se o backend já enviou a aba Faturas_Detalhadas preenchida, usa diretamente
-      if (dadosGlobais.faturasDetalhadas && dadosGlobais.faturasDetalhadas.length > 0) {
-        dadosGlobais.faturasDetalhadas.forEach(row => {
-          const comp = String(row[0]).trim();
-          const cartao = String(row[1] || 'GOLD').toUpperCase();
-          const venc = formatarDataBr(row[2]);
-          const totalFat = parseNum(row[3]);
-          const statusFat = String(row[4] || '');
-          const dataItem = formatarDataBr(row[5]);
-          const descItem = String(row[6] || '').toUpperCase();
-          const parcItem = String(row[7] || '').toUpperCase();
-          const valorItem = parseNum(row[8]);
-
-          if (!mapaFaturasOrganizadas[comp]) {
-            mapaFaturasOrganizadas[comp] = {
-              cartao: cartao,
-              vencimento: venc,
-              valorTotal: totalFat,
-              status: statusFat,
-              itens: []
-            };
-          }
-          mapaFaturasOrganizadas[comp].itens.push({
-            data: dataItem,
-            descricao: descItem,
-            parcela: parcItem,
-            valor: valorItem
-          });
-        });
-        return;
-      }
-
-      // Caso o Apps Script ainda não tenha rodado a versão nova, reconstrói localmente no navegador!
+      // Mapeia faturas oficiais fechadas da aba Faturas para referência de vencimento e ajuste de arredondamento (<= 0,05)
       const faturasOficiais = {};
       (dadosGlobais.faturas || []).forEach(f => {
         const vencBr = formatarDataBr(f[1]);
@@ -234,133 +218,103 @@
         }
       });
 
-      const itensPorComp = {};
-      const series = {};
+      const txs = dadosGlobais.transacoes || [];
 
-      function addItem(comp, it) {
-        if (!itensPorComp[comp]) itensPorComp[comp] = [];
-        itensPorComp[comp].push(it);
-      }
-
-      (dadosGlobais.transacoes || []).forEach(tx => {
-        const dataBr = formatarDataBr(tx[0]);
+      // Regra 1: Detecta se as parcelas de abertura de ciclo ("Parcela 2/", "3/", "6/", "7/") estão no dia 07 (UTC-4) ou 08 (BRT/UTC)
+      let qtdDia07 = 0;
+      let qtdDia08 = 0;
+      txs.forEach(tx => {
         const conta = String(tx[1] || '').toLowerCase();
         const origem = String(tx[2] || '').toLowerCase();
-        const desc = String(tx[3] || '').trim();
-        const direcao = String(tx[6] || '').toUpperCase();
-        const valor = parseNum(tx[7]);
-        const parcCol = String(tx[8] || '').trim();
-
         if (!origem.includes('crédito') && !conta.includes('gold')) return;
-        if (!dataBr) return;
-        if (desc.toLowerCase().includes('pagamento recebido') || desc.toLowerCase().includes('pagamento de fatura')) return;
-        if (direcao === 'CREDIT' || valor <= 0) return;
+        const desc = String(tx[3] || '').toLowerCase();
+        if (desc.includes('parcela 2/') || desc.includes('parcela 3/') || desc.includes('parcela 6/') || desc.includes('parcela 7/')) {
+          const dBr = formatarDataBr(tx[0]);
+          const p = dBr.split('/');
+          if (p.length === 3) {
+            const dia = parseInt(p[0], 10);
+            if (dia === 7) qtdDia07++;
+            if (dia === 8) qtdDia08++;
+          }
+        }
+      });
+      const deslocamentoDias = (qtdDia07 > qtdDia08) ? 1 : 0;
 
-        const p = dataBr.split('/');
+      const itensPorComp = {};
+
+      txs.forEach(tx => {
+        const conta = String(tx[1] || '').toLowerCase();
+        const origem = String(tx[2] || '').toLowerCase();
+        if (!origem.includes('crédito') && !conta.includes('gold')) return;
+
+        const dataOriginal = formatarDataBr(tx[0]);
+        if (!dataOriginal) return;
+
+        const dataRealBr = somarDiasBr(dataOriginal, deslocamentoDias);
+        const p = dataRealBr.split('/');
         if (p.length !== 3) return;
+
         const dia = parseInt(p[0], 10);
         const mes = parseInt(p[1], 10);
         const ano = parseInt(p[2], 10);
+
         if (ano < 2026 || (ano === 2026 && mes < 4)) return;
 
-        // Corte dia 07 -> Vencimento dia 14
-        let mesFat = dia >= 7 ? mes + 1 : mes;
+        const desc = String(tx[3] || '').trim();
+        const descLower = desc.toLowerCase();
+
+        // Regra 3: Ignora "Pagamento recebido" (pagamento da fatura anterior)
+        if (descLower === 'pagamento recebido' || descLower.includes('pagamento de fatura')) return;
+
+        const direcao = String(tx[6] || '').toUpperCase();
+        const valorBruto = parseNum(tx[7]);
+        const valorAbs = Math.abs(valorBruto);
+        if (valorAbs === 0) return;
+
+        // Estornos de compra ou IOF no cartão vêm como CREDIT -> subtraem da fatura
+        const ehEstorno = (direcao === 'CREDIT' || valorBruto < 0);
+        const valorAssinado = ehEstorno ? -valorAbs : valorAbs;
+
+        // Regra 2: Corte do Nubank (08/Mês_Anterior até 07/Mês_Vencimento)
+        let mesFat = dia >= 8 ? mes + 1 : mes;
         let anoFat = ano;
-        if (mesFat > 12) { mesFat = 1; anoFat++; }
+        if (mesFat > 12) {
+          mesFat = 1;
+          anoFat++;
+        }
         const comp = `${String(mesFat).padStart(2, '0')}/${anoFat}`;
-        const compIdx = anoFat * 12 + (mesFat - 1);
 
-        let mParc = parcCol.match(/^(\d{1,2})\/(\d{1,2})$/) || desc.match(/\b(\d{1,2})\/(\d{1,2})\b/);
-        if (mParc) {
-          const numP = parseInt(mParc[1], 10);
-          const totP = parseInt(mParc[2], 10);
-          const descBase = desc.replace(/\b\d{1,2}\/\d{1,2}\b/g, '').trim();
-          const chave = `${descBase.toLowerCase()}_${valor.toFixed(2)}_${totP}`;
-          if (!series[chave]) {
-            series[chave] = { descBase, totP, valor, ancoras: [] };
-          }
-          series[chave].ancoras.push({ numP, compIdx, dia });
-        } else {
-          addItem(comp, {
-            data: dataBr,
-            descricao: desc.toUpperCase(),
-            parcela: 'À VISTA',
-            valor: valor
-          });
-        }
+        const parcelaCol = String(tx[8] || '').trim();
+        const rotuloParcela = ehEstorno ? 'ESTORNO / CRÉDITO' : (parcelaCol ? `PARCELA ${parcelaCol}` : 'À VISTA');
+
+        if (!itensPorComp[comp]) itensPorComp[comp] = [];
+        itensPorComp[comp].push({
+          data: dataRealBr,
+          descricao: desc.toUpperCase(),
+          parcela: rotuloParcela.toUpperCase(),
+          valor: Number(valorAssinado.toFixed(2)),
+          ehEstorno: ehEstorno
+        });
       });
 
-      Object.keys(series).forEach(k => {
-        const s = series[k];
-        s.ancoras.sort((a, b) => b.numP - a.numP);
-        const anc = s.ancoras[0];
+      Object.keys(itensPorComp).forEach(comp => {
+        const lista = itensPorComp[comp];
+        lista.sort((a, b) => timestampDataBr(b.data) - timestampDataBr(a.data));
 
-        for (let i = 1; i <= s.totP; i++) {
-          const idxAlvo = anc.compIdx + (i - anc.numP);
-          const anoAlvo = Math.floor(idxAlvo / 12);
-          const mesAlvo = (idxAlvo % 12) + 1;
-          if (anoAlvo < 2026 || (anoAlvo === 2026 && mesAlvo < 5)) continue;
+        const somaCalculada = Number(lista.reduce((acc, it) => acc + it.valor, 0).toFixed(2));
+        const oficial = faturasOficiais[comp];
 
-          const compAlvo = `${String(mesAlvo).padStart(2, '0')}/${anoAlvo}`;
-          let mesCompraRef = anc.dia >= 7 ? mesAlvo - 1 : mesAlvo;
-          let anoCompraRef = anoAlvo;
-          if (mesCompraRef < 1) { mesCompraRef = 12; anoCompraRef--; }
-          const dataRef = `${String(Math.min(anc.dia, 28)).padStart(2, '0')}/${String(mesCompraRef).padStart(2, '0')}/${anoCompraRef}`;
+        // Se existir fatura fechada na aba Faturas e a diferença for apenas de arredondamento de centavos (<= R$ 0,05), usa o valor oficial
+        const valorFinalFatura = (oficial && Math.abs(oficial.valorTotal - somaCalculada) <= 0.05)
+          ? oficial.valorTotal
+          : somaCalculada;
 
-          addItem(compAlvo, {
-            data: dataRef,
-            descricao: `${s.descBase} ${i}/${s.totP}`.toUpperCase(),
-            parcela: `${i}/${s.totP}`,
-            valor: s.valor
-          });
-        }
-      });
-
-      const competencias = [
-        '05/2026', '06/2026', '07/2026', '08/2026', '09/2026',
-        '10/2026', '11/2026', '12/2026', '01/2027', '02/2027', '03/2027', '04/2027'
-      ];
-
-      // Saldo total utilizado no cartão (1882.75) menos Outubro (1166.11) e menos Dez..Abr (371.37) = 345.27 em Novembro
-      let somaPosNov = 0;
-      ['12/2026', '01/2027', '02/2027', '03/2027', '04/2027'].forEach(c => {
-        const lista = itensPorComp[c] || [];
-        somaPosNov += Number(lista.reduce((a, b) => a + b.valor, 0).toFixed(2));
-      });
-      const valorOut = faturasOficiais['10/2026'] ? faturasOficiais['10/2026'].valorTotal : 1166.11;
-      const valorNov = Number((1882.75 - valorOut - somaPosNov).toFixed(2)) || 345.27;
-
-      competencias.forEach(comp => {
-        const itens = itensPorComp[comp] || [];
-        const somaItens = Number(itens.reduce((a, b) => a + b.valor, 0).toFixed(2));
-        let totalMes = somaItens;
-        let vencMes = `14/${comp}`;
-
-        if (faturasOficiais[comp]) {
-          totalMes = faturasOficiais[comp].valorTotal;
-          vencMes = faturasOficiais[comp].vencimento;
-        } else if (comp === '11/2026') {
-          totalMes = valorNov;
-        }
-
-        const dif = Number((totalMes - somaItens).toFixed(2));
-        if (Math.abs(dif) >= 0.01 && totalMes > 0) {
-          const [mStr, aStr] = comp.split('/');
-          const mAnt = Number(mStr) === 1 ? 12 : Number(mStr) - 1;
-          const aAnt = Number(mStr) === 1 ? Number(aStr) - 1 : Number(aStr);
-          itens.push({
-            data: `07/${String(mAnt).padStart(2, '0')}/${aAnt}`,
-            descricao: 'PARCELAS / COMPRAS ANTERIORES CONCILIADAS NA FATURA',
-            parcela: 'CONCILIAÇÃO FATURA',
-            valor: dif
-          });
-        }
-
-        mapaFaturasOrganizadas[comp] = {
-          cartao: 'GOLD',
-          vencimento: vencMes,
-          valorTotal: totalMes,
-          itens: itens
+        mapaFaturasPorCompetencia[comp] = {
+          cartao: oficial ? oficial.cartao : 'GOLD',
+          vencimento: oficial ? oficial.vencimento : `14/${comp}`,
+          valorTotal: valorFinalFatura,
+          somaExtrato: somaCalculada,
+          itens: lista
         };
       });
     }
@@ -384,10 +338,10 @@
           let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
           let isReal = ehOutubro2026 && String(status).toUpperCase().includes('RECEBIDO');
           let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-          let horaDetalhe = isReal ? extrairHoraTx(idTxReal) : '';
+          let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
           let dataStr = isReal && dataBaixa
-            ? `RECEBIDO EM: ${formatarDataBr(dataBaixa)} • ${horaDetalhe} • FAV.: ${ String(regra || compromisso).toUpperCase() }`
-            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum}`;
+            ? `RECEBIDO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`
+            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`;
           let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
           let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
 
@@ -408,10 +362,10 @@
           let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
           let isReal = ehOutubro2026 && String(status).toUpperCase().includes('PAGO');
           let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-          let horaDetalhe = isReal ? extrairHoraTx(idTxReal) : '';
+          let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
           let dataStr = isReal && dataBaixa
-            ? `PAGO EM: ${formatarDataBr(dataBaixa)} • ${horaDetalhe} • FAV.: ${ String(regra || compromisso).toUpperCase() }`
-            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum}`;
+            ? `PAGO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • FAV.: ${String(regra || compromisso).toUpperCase()}`
+            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • FAV.: ${String(regra || compromisso).toUpperCase()}`;
           let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
           let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
 
@@ -440,7 +394,7 @@
       try {
         const resposta = await fetch(URL_DO_WEB_APP);
         dadosGlobais = await resposta.json();
-        processarFaturasNubank();
+        construirFaturasDaPlanilha();
         renderizarDados();
       } catch (e) {
         console.error("Erro ao carregar dados:", e);
@@ -460,7 +414,7 @@
     }
 
     function renderizarDados() {
-      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "11/2026"
+      const mesSelecionado = document.getElementById('filtro-mes').value;
       const [mesNum, anoNum] = mesSelecionado.split('/');
       const nomesMeses = {
         "05": "MAIO", "06": "JUNHO", "07": "JULHO", "08": "AGOSTO",
@@ -469,10 +423,9 @@
       };
       document.getElementById('titulo-mes').innerText = `${nomesMeses[mesNum] || "MÊS"} ${anoNum}`;
 
-      // Calcula ciclo de corte (07 do mês anterior a 06 do mês selecionado)
       let mesAnt = Number(mesNum) === 1 ? 12 : Number(mesNum) - 1;
       let anoAnt = Number(mesNum) === 1 ? Number(anoNum) - 1 : Number(anoNum);
-      document.getElementById('subtitulo-ciclo').innerText = `COMPRAS DE 07/${String(mesAnt).padStart(2, '0')}/${anoAnt} A 06/${mesNum}/${anoNum} • VENC. 14/${mesNum}/${anoNum}`;
+      document.getElementById('subtitulo-ciclo').innerText = `CICLO: 08/${String(mesAnt).padStart(2, '0')}/${anoAnt} A 07/${mesNum}/${anoNum} • VENC. 14/${mesNum}/${anoNum}`;
 
       let containerFat = document.getElementById('lista-faturas');
       containerFat.innerHTML = '';
@@ -492,28 +445,32 @@
         if (String(tipo).toUpperCase() === 'SAIDA') { totalSaidasFixas += valorExibido; qtdSaidas++; }
       });
 
-      const faturaObj = mapaFaturasOrganizadas[mesSelecionado] || {
+      const faturaObj = mapaFaturasPorCompetencia[mesSelecionado] || {
         cartao: 'GOLD',
         vencimento: `14/${mesSelecionado}`,
         valorTotal: 0,
+        somaExtrato: 0,
         itens: []
       };
 
       const totalFaturasMes = Number(faturaObj.valorTotal || 0);
       const itensExtrato = faturaObj.itens || [];
-      const somaExtrato = itensExtrato.reduce((acc, i) => acc + Number(i.valor || 0), 0);
 
       let htmlTxs = itensExtrato.length === 0
         ? '<div class="text-[11px] text-slate-400 py-1 uppercase">SEM LANÇAMENTOS NESTE CICLO.</div>'
-        : itensExtrato.map(it => `
-            <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
-              <div class="pr-2">
-                <span class="text-slate-200 font-medium block uppercase">${it.descricao}</span>
-                <span class="text-[10px] text-slate-400 uppercase">${it.data} • ${it.parcela}</span>
+        : itensExtrato.map(it => {
+            const corValor = it.ehEstorno ? 'text-emerald-400' : 'text-rose-400';
+            const sinal = it.ehEstorno ? '- R$ ' : 'R$ ';
+            return `
+              <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
+                <div class="pr-2">
+                  <span class="text-slate-200 font-medium block uppercase">${it.descricao}</span>
+                  <span class="text-[10px] text-slate-400 uppercase">${it.data} • ${it.parcela}</span>
+                </div>
+                <span class="${corValor} font-bold whitespace-nowrap">${sinal}${formatarMoeda(Math.abs(it.valor))}</span>
               </div>
-              <span class="text-rose-400 font-bold whitespace-nowrap">R$ ${formatarMoeda(it.valor)}</span>
-            </div>
-          `).join('');
+            `;
+          }).join('');
 
       containerFat.innerHTML += `
         <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
@@ -530,7 +487,7 @@
           <div id="fatura-unica" class="bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
             <div class="flex justify-between items-center mb-1">
               <span class="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">EXTRATO DA FATURA (${itensExtrato.length} LANÇAMENTOS)</span>
-              <span class="text-[10px] text-slate-300 uppercase font-semibold">SOMA: R$ ${formatarMoeda(somaExtrato)}</span>
+              <span class="text-[10px] text-slate-300 uppercase font-semibold">SOMA LÍQUIDA: R$ ${formatarMoeda(faturaObj.somaExtrato)}</span>
             </div>
             ${htmlTxs}
           </div>
