@@ -26,15 +26,13 @@
 
   <main class="max-w-md mx-auto p-4 space-y-4">
 
-    <!-- Cards de Resumo Clicáveis (ENTRADAS PREVISTAS e DESPESAS) -->
+    <!-- Cards de Resumo Clicáveis -->
     <div class="grid grid-cols-2 gap-3">
-      <!-- Card Entradas Previstas (Clicável) -->
       <div onclick="abrirDetalhes('entradas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-emerald-500 transition">
         <span class="text-[11px] font-semibold text-emerald-400 block uppercase">ENTRADAS PREVISTAS</span>
         <span id="total-entradas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
         <span id="qtd-entradas" class="text-[10px] text-slate-400">0 lançamento(s)</span>
       </div>
-      <!-- Card Despesas (Clicável) -->
       <div onclick="abrirDetalhes('despesas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-rose-500 transition">
         <span class="text-[11px] font-semibold text-rose-400 block uppercase">DESPESAS</span>
         <span id="total-saidas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
@@ -42,7 +40,7 @@
       </div>
     </div>
 
-    <!-- Card de Saldo Líquido do Mês -->
+    <!-- Saldo Líquido -->
     <div class="bg-gradient-to-r from-emerald-900/50 to-slate-800 border border-emerald-700/50 p-4 rounded-2xl shadow flex justify-between items-center">
       <div>
         <span class="text-xs text-emerald-300 block font-medium uppercase">SALDO LÍQUIDO PROJETADO</span>
@@ -51,7 +49,7 @@
       <span id="saldo-liquido" class="text-lg font-bold text-emerald-400">R$ 0,00</span>
     </div>
 
-    <!-- Seção de Faturas de Cartão (Com Projeção Inteligente) -->
+    <!-- Faturas de Cartão -->
     <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow space-y-3">
       <div class="flex justify-between items-center border-b border-slate-700/60 pb-2">
         <h2 class="text-sm font-semibold text-slate-200 uppercase">FATURAS DE CARTÃO</h2>
@@ -69,7 +67,7 @@
 
   </main>
 
-  <!-- Modal de Detalhes -->
+  <!-- Modal Detalhes -->
   <div id="modal-detalhes" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-4 z-50">
     <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[80vh] flex flex-col">
       <div class="flex justify-between items-center border-b border-slate-700 pb-2">
@@ -80,7 +78,7 @@
     </div>
   </div>
 
-  <!-- Modal Cadastro Manual -->
+  <!-- Modal Cadastro -->
   <div id="modal-cadastro" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
     <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center">
@@ -133,24 +131,22 @@
       const lista = document.getElementById('modal-lista-detalhes');
       lista.innerHTML = '';
 
-      const mesSelecionado = document.getElementById('filtro-mes').value; // "10/2026"
+      const mesSelecionado = document.getElementById('filtro-mes').value;
       const [mesNum, anoNum] = mesSelecionado.split('/');
 
       if (tipo === 'entradas') {
         titulo.innerText = "DETALHES - ENTRADAS PREVISTAS & RECEBIDAS";
-        let entradasItens = dadosGlobais.compromissos.filter(i => i[1] === 'ENTRADA');
-        
-        entradasItens.forEach(item => {
+        dadosGlobais.compromissos.filter(i => i[1] === 'ENTRADA').forEach(item => {
           let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal] = item;
           let isReal = status.includes('RECEBIDO');
           let val = isReal && valorReal !== "" ? Number(valorReal) : Number(valorPrevisto);
-          let dataHoraStr = isReal && item[7] ? `Data Baixa: ${item[7]}` : `Vencimento Previsto: Dia ${dia}/${mesNum}/${anoNum}`;
+          let dataStr = isReal && item[7] ? `Data Baixa: ${item[7]}` : `Vencimento: Dia ${dia}/${mesNum}/${anoNum}`;
 
           lista.innerHTML += `
             <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
               <div>
                 <p class="text-sm font-semibold text-white">${compromisso}</p>
-                <span class="text-[11px] text-emerald-400 block">${dataHoraStr}</span>
+                <span class="text-[11px] text-emerald-400 block">${dataStr}</span>
                 <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">${status || 'PENDENTE'}</span>
               </div>
               <span class="font-bold text-emerald-400 text-sm">R$ ${val.toFixed(2)}</span>
@@ -159,19 +155,17 @@
         });
       } else {
         titulo.innerText = "DETALHES - DESPESAS & FATURAS";
-        let saidasItens = dadosGlobais.compromissos.filter(i => i[1] === 'SAIDA');
-
-        saidasItens.forEach(item => {
+        dadosGlobais.compromissos.filter(i => i[1] === 'SAIDA').forEach(item => {
           let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal] = item;
           let isReal = status.includes('PAGO');
           let val = isReal && valorReal !== "" ? Number(valorReal) : Number(valorPrevisto);
-          let dataHoraStr = isReal && item[7] ? `Data Baixa: ${item[7]}` : `Vencimento Previsto: Dia ${dia}/${mesNum}/${anoNum}`;
+          let dataStr = isReal && item[7] ? `Data Baixa: ${item[7]}` : `Vencimento: Dia ${dia}/${mesNum}/${anoNum}`;
 
           lista.innerHTML += `
             <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
               <div>
                 <p class="text-sm font-semibold text-white">${compromisso}</p>
-                <span class="text-[11px] text-rose-400 block">${dataHoraStr}</span>
+                <span class="text-[11px] text-rose-400 block">${dataStr}</span>
                 <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">${status || 'PENDENTE'}</span>
               </div>
               <span class="font-bold text-rose-400 text-sm">R$ ${val.toFixed(2)}</span>
@@ -179,7 +173,6 @@
           `;
         });
       }
-
       modal.classList.remove('hidden');
       modal.classList.add('flex');
     }
@@ -212,7 +205,7 @@
     }
 
     function renderizarDados() {
-      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "11/2026"
+      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "10/2026"
       const [mesNum, anoNum] = mesSelecionado.split('/');
       const nomesMeses = {"10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"};
       document.getElementById('titulo-mes').innerText = nomesMeses[mesNum] || "MÊS";
@@ -226,38 +219,23 @@
       let qtdSaidas = 0;
       let totalFaturasMes = 0;
 
-      // 1. Calcula Entradas e Saídas Fixas
       dadosGlobais.compromissos.forEach(item => {
         let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
         let isRealizado = status.includes('PAGO') || status.includes('RECEBIDO');
         let valorExibido = (isRealizado && valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
         
-        if (tipo === 'ENTRADA') {
-          totalEntradas += valorExibido;
-          qtdEntradas++;
-        }
-        if (tipo === 'SAIDA') {
-          totalSaidasFixas += valorExibido;
-          qtdSaidas++;
-        }
+        if (tipo === 'ENTRADA') { totalEntradas += valorExibido; qtdEntradas++; }
+        if (tipo === 'SAIDA') { totalSaidasFixas += valorExibido; qtdSaidas++; }
       });
 
-      // 2. Filtra Faturas do Mês Selecionado ou Cria Projeção Inteligente se não existir
       let faturasDoMes = dadosGlobais.faturas.filter(fat => {
-        let vencimento = fat[1]; // Ex: "14/11/2026"
+        let vencimento = fat[1];
         return vencimento && (vencimento.includes(`/${mesNum}/${anoNum}`) || vencimento.startsWith(`${anoNum}-${mesNum}`));
       });
 
-      // Se não houver fatura oficial da Pluggy para o mês (ex: Novembro), calcula uma projeção baseada na média dos meses anteriores
       if (faturasDoMes.length === 0 && dadosGlobais.faturas.length > 0) {
-        let somaFaturasAnteriores = dadosGlobais.faturas.reduce((acc, f) => acc + (Number(f[2]) || 0), 0);
-        let mediaFatura = somaFaturasAnteriores / dadosGlobais.faturas.length;
-        if (mediaFatura <= 0) mediaFatura = 1100.00; // Valor base de segurança
-
-        // Cria um card de projeção para o cartão principal (ex: Gold)
-        faturasDoMes = [
-          ["GOLD (Projeção)", `14/${mesNum}/${anoNum}`, mediaFatura, mediaFatura * 0.15, "PROJECTED", "proj-" + mesNum]
-        ];
+        let mediaFatura = dadosGlobais.faturas.reduce((acc, f) => acc + (Number(f[2]) || 0), 0) / dadosGlobais.faturas.length || 1100.00;
+        faturasDoMes = [["GOLD (Projeção)", `14/${mesNum}/${anoNum}`, mediaFatura, mediaFatura * 0.15, "PROJECTED", "proj-" + mesNum]];
       }
 
       if (faturasDoMes.length === 0) {
@@ -267,16 +245,19 @@
           let [cartao, vencimento, valorTotal, minimo, estado, billId] = fat;
           totalFaturasMes += Number(valorTotal) || 0;
 
+          // Cruza as transações da aba Transações pelo nome do cartão ou tipo de conta de crédito
           let txsDoCartao = dadosGlobais.transacoes.filter(tx => {
             let contaTx = String(tx[1]).toLowerCase();
-            return contaTx.includes(String(cartao).toLowerCase().replace(" (projeção)", "")) || contaTx.includes("gold") || contaTx.includes("cartão");
+            let origemTx = String(tx[2]).toLowerCase();
+            let cartaoBusca = String(cartao).toLowerCase();
+            return contaTx.includes(cartaoBusca) || cartaoBusca.includes(contaTx) || origemTx.includes('cartão') || contaTx.includes('gold');
           });
 
-          let txsExibicao = txsDoCartao.slice(0, 15);
+          let txsExibicao = txsDoCartao.slice(0, 20);
           let idAccordion = `fatura-${index}`;
 
           let htmlTxs = txsExibicao.length === 0 
-            ? '<div class="text-[11px] text-slate-400 py-1">Valor projetado com base no histórico de consumo.</div>' 
+            ? '<div class="text-[11px] text-slate-400 py-1">Sem transações detalhadas associadas.</div>' 
             : txsExibicao.map(tx => `
                 <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
                   <div>
@@ -300,7 +281,7 @@
                 </div>
               </div>
               <div id="${idAccordion}" class="hidden bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
-                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">DETALHES DA PROJEÇÃO</span>
+                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">VER LANÇAMENTOS (${txsExibicao.length})</span>
                 ${htmlTxs}
               </div>
             </div>
