@@ -6,103 +6,117 @@
   <title>Meu Controle Financeiro</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans pb-12">
+<body class="bg-[#0f172a] text-slate-100 font-sans pb-12">
 
-  <!-- Header -->
-  <header class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50 shadow-md">
+  <!-- Header Estilo Cartão Verde -->
+  <header class="bg-[#14532d] shadow-md p-4 sticky top-0 z-50">
     <div class="max-w-md mx-auto flex justify-between items-center">
-      <h1 class="text-lg font-bold text-emerald-400">💰 Finanças Pessoais</h1>
-      <!-- Seletor de Mês / Prospecção -->
-      <select id="filtro-mes" onchange="renderizarDados()" class="bg-slate-700 text-xs text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-600 focus:outline-none">
-        <option value="10/2026" selected>Outubro/2026</option>
-        <option value="11/2026">Novembro/2026</option>
-        <option value="12/2026">Dezembro/2026</option>
+      <div>
+        <span class="text-[11px] uppercase tracking-wider text-emerald-200 block font-medium">Meu Financeiro</span>
+        <h1 id="titulo-mes" class="text-xl font-bold text-white">Outubro</h1>
+      </div>
+      <!-- Seletor de Mês -->
+      <select id="filtro-mes" onchange="renderizarDados()" class="bg-[#166534] text-xs text-white px-3 py-2 rounded-xl border border-emerald-600 focus:outline-none font-medium">
+        <option value="10/2026" selected>OUTUBRO/2026</option>
+        <option value="11/2026">NOVEMBRO/2026</option>
+        <option value="12/2026">DEZEMBRO/2026</option>
       </select>
     </div>
   </header>
 
   <main class="max-w-md mx-auto p-4 space-y-4">
 
-    <!-- Card Resumo / Prospecção -->
-    <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow">
-      <h2 class="text-xs uppercase tracking-wider text-slate-400 mb-2">Visão Geral do Mês</h2>
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-          <span class="text-xs text-emerald-400 block">Total Entradas</span>
-          <span id="total-entradas" class="text-lg font-bold">R$ 0,00</span>
-        </div>
-        <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-          <span class="text-xs text-rose-400 block">Total Saídas</span>
-          <span id="total-saidas" class="text-lg font-bold">R$ 0,00</span>
-        </div>
+    <!-- Cards de Resumo (Entradas, Saídas e Saldo Líquido) -->
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow">
+        <span class="text-[11px] font-semibold text-emerald-400 block uppercase">Entradas Previstas</span>
+        <span id="total-entradas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
+        <span id="qtd-entradas" class="text-[10px] text-slate-400">0 lançamento(s)</span>
+      </div>
+      <div class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow">
+        <span class="text-[11px] font-semibold text-rose-400 block uppercase">Fixas / Parcelas</span>
+        <span id="total-saidas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
+        <span id="qtd-saidas" class="text-[10px] text-slate-400">0 compromisso(s)</span>
+      </div>
+    </div>
+
+    <!-- Card de Saldo Líquido do Mês -->
+    <div class="bg-gradient-to-r from-emerald-900/50 to-slate-800 border border-emerald-700/50 p-4 rounded-2xl shadow flex justify-between items-center">
+      <div>
+        <span class="text-xs text-emerald-300 block font-medium">Saldo Líquido Projetado</span>
+        <span class="text-[10px] text-slate-400">Entradas menos saídas e faturas</span>
+      </div>
+      <span id="saldo-liquido" class="text-lg font-bold text-emerald-400">R$ 0,00</span>
+    </div>
+
+    <!-- Seção de Faturas de Cartão com Expansão -->
+    <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow space-y-3">
+      <div class="flex justify-between items-center border-b border-slate-700/60 pb-2">
+        <h2 class="text-sm font-semibold text-slate-200">Faturas de Cartão</h2>
+        <span id="total-faturas" class="text-xs font-bold text-rose-400">R$ 0,00</span>
+      </div>
+      <div id="lista-faturas" class="space-y-3">
+        <div class="text-xs text-slate-400 text-center py-2">A carregar faturas...</div>
       </div>
     </section>
 
-    <!-- Faturas de Cartão de Crédito -->
-    <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow">
-      <h2 class="text-sm font-semibold text-slate-200 mb-2">💳 Faturas de Cartão</h2>
-      <div id="lista-faturas" class="space-y-2">
-        <div class="text-xs text-slate-400">A carregar faturas...</div>
-      </div>
-    </section>
-
-    <!-- Seção de Contas Fixas e Compromissos -->
-    <section class="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow">
+    <!-- Seção de Compromissos e Contas Fixas -->
+    <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow">
       <div class="flex justify-between items-center mb-3">
         <h2 class="text-sm font-semibold text-slate-200">Compromissos do Mês</h2>
-        <button onclick="abrirModal()" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-3 py-1.5 rounded-lg font-medium transition">+ Novo</button>
+        <button onclick="abrirModal()" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-3 py-1.5 rounded-xl font-medium transition shadow">+ Novo</button>
       </div>
       
       <div id="lista-compromissos" class="space-y-2.5">
-        <div class="text-center py-4 text-slate-400 text-sm">A sincronizar com a planilha...</div>
+        <div class="text-center py-4 text-slate-400 text-sm">A sincronizar...</div>
       </div>
     </section>
 
   </main>
 
-  <!-- Modal Cadastro Manual com Parcelamento -->
+  <!-- Modal Cadastro Manual -->
   <div id="modal-cadastro" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
+    <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center">
         <h3 class="font-bold text-base text-slate-200">Adicionar Despesa / Receita</h3>
-        <button onclick="fecharModal()" class="text-slate-400 hover:text-white">&times;</button>
+        <button onclick="fecharModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
       </div>
       <form id="form-novo" onsubmit="salvarCompromisso(event)" class="space-y-3">
         <div>
           <label class="text-xs text-slate-400 block mb-1">Compromisso / Descrição</label>
-          <input type="text" id="novo-nome" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <input type="text" id="novo-nome" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="text-xs text-slate-400 block mb-1">Tipo</label>
-            <select id="novo-tipo" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+            <select id="novo-tipo" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
               <option value="SAIDA">Saída</option>
               <option value="ENTRADA">Entrada</option>
             </select>
           </div>
           <div>
             <label class="text-xs text-slate-400 block mb-1">Valor Total (R$)</label>
-            <input type="number" step="0.01" id="novo-valor" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+            <input type="number" step="0.01" id="novo-valor" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="text-xs text-slate-400 block mb-1">Dia do Vencimento</label>
-            <input type="number" id="novo-dia" min="1" max="31" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+            <input type="number" id="novo-dia" min="1" max="31" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
           </div>
           <div>
             <label class="text-xs text-slate-400 block mb-1">Qtd Parcelas</label>
-            <input type="number" id="novo-parcelas" min="1" max="48" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+            <input type="number" id="novo-parcelas" min="1" max="48" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
           </div>
         </div>
-        <button type="submit" id="btn-salvar" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg transition text-sm">Salvar Compromisso</button>
+        <button type="submit" id="btn-salvar" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition text-sm shadow">Salvar Compromisso</button>
       </form>
     </div>
   </div>
 
   <script>
     const URL_DO_WEB_APP = "https://script.google.com/macros/s/AKfycbzNdp_jDA9za0m-jg_N1-IOjzZKDnSKnm22427gleTSKJLtXKPU1_mHYsU0emJKVTn_UQ/exec";
-    let dadosGlobais = { compromissos: [], faturas: [] };
+    let dadosGlobais = { compromissos: [], faturas: [], transacoes: [] };
 
     function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
     function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
@@ -117,30 +131,56 @@
       }
     }
 
+    function toggleFatura(id) {
+      const el = document.getElementById(id);
+      const seta = document.getElementById('seta-' + id);
+      if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+        seta.style.transform = 'rotate(180deg)';
+      } else {
+        el.classList.add('hidden');
+        seta.style.transform = 'rotate(0deg)';
+      }
+    }
+
     function renderizarDados() {
+      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "10/2026"
+      const [mesNum, anoNum] = mesSelecionado.split('/');
+      const nomesMeses = {"10": "Outubro", "11": "Novembro", "12": "Dezembro"};
+      document.getElementById('titulo-mes').innerText = nomesMeses[mesNum] || "Mês";
+
       let containerComp = document.getElementById('lista-compromissos');
       let containerFat = document.getElementById('lista-faturas');
       containerComp.innerHTML = '';
       containerFat.innerHTML = '';
 
       let totalEntradas = 0;
+      let qtdEntradas = 0;
       let totalSaidas = 0;
+      let qtdSaidas = 0;
+      let totalFaturasMes = 0;
 
-      // Renderiza Compromissos
+      // 1. Renderiza Compromissos
       dadosGlobais.compromissos.forEach(item => {
         let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
         let isRealizado = status.includes('PAGO') || status.includes('RECEBIDO');
         let valorExibido = (isRealizado && valorReal !== "" && !isNaN(valorReal)) ? Number(valorReal) : Number(valorPrevisto);
         
-        if (tipo === 'ENTRADA') totalEntradas += valorExibido;
-        if (tipo === 'SAIDA') totalSaidas += valorExibido;
+        if (tipo === 'ENTRADA') {
+          totalEntradas += valorExibido;
+          qtdEntradas++;
+        }
+        if (tipo === 'SAIDA') {
+          totalSaidas += valorExibido;
+          qtdSaidas++;
+        }
 
         let corStatus = isRealizado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
         let textoStatus = status !== "" ? status : 'PENDENTE';
         let corValor = tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400';
 
         containerComp.innerHTML += `
-          <div class="bg-slate-900/40 p-3 rounded-xl border border-slate-700/40 flex justify-between items-center">
+          <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex justify-between items-center">
             <div>
               <p class="text-sm font-medium text-white">${compromisso}</p>
               <span class="text-[11px] text-slate-400">Vencimento: Dia ${dia}</span>
@@ -153,27 +193,71 @@
         `;
       });
 
-      // Renderiza Faturas
+      // 2. Renderiza Faturas de Cartão e Transações Correspondentes
       if (dadosGlobais.faturas.length === 0) {
-        containerFat.innerHTML = '<div class="text-xs text-slate-400">Nenhuma fatura de cartão registada.</div>';
+        containerFat.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">Nenhuma fatura registada.</div>';
       } else {
-        dadosGlobais.faturas.forEach(fat => {
-          let [cartao, vencimento, valorTotal, minimo, estado] = fat;
-          totalSaidas += Number(valorTotal) || 0;
+        dadosGlobais.faturas.forEach((fat, index) => {
+          let [cartao, vencimento, valorTotal, minimo, estado, billId] = fat;
+          
+          // Filtra faturas pelo mês selecionado se a data de vencimento corresponder
+          if (vencimento && vencimento.includes(`/${mesNum}/${anoNum}`)) {
+            totalFaturasMes += Number(valorTotal) || 0;
+          }
+
+          // Transações vinculadas a este cartão no mês
+          let txsDoCartao = dadosGlobais.transacoes.filter(tx => {
+            let dataTx = tx[0]; // Data "DD/MM/YYYY"
+            let contaTx = tx[1]; // Nome do cartão
+            return contaTx.toLowerCase().includes(cartao.toLowerCase()) && dataTx && dataTx.includes(`/${mesNum}/${anoNum}`);
+          });
+
+          let idAccordion = `fatura-${index}`;
+
+          let htmlTxs = txsDoCartao.length === 0 
+            ? '<div class="text-[11px] text-slate-400 py-1">Sem lançamentos detalhados para este período.</div>' 
+            : txsDoCartao.map(tx => `
+                <div class="flex justify-between items-center text-xs py-1 border-b border-slate-700/40 last:border-0">
+                  <span class="text-slate-300 truncate max-w-[200px]">${tx[3]}</span>
+                  <span class="text-rose-400 font-semibold">R$ ${Math.abs(Number(tx[7])).toFixed(2)}</span>
+                </div>
+              `).join('');
+
           containerFat.innerHTML += `
-            <div class="bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/40 flex justify-between items-center text-xs">
-              <div>
-                <span class="font-medium text-white block">${cartao}</span>
-                <span class="text-slate-400">Vencimento: ${vencimento}</span>
+            <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
+              <div onclick="toggleFatura('${idAccordion}')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
+                <div>
+                  <span class="font-semibold text-white block text-sm">${cartao}</span>
+                  <span class="text-[11px] text-slate-400">Vencimento: ${vencimento}</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <span class="font-bold text-rose-400 text-sm">R$ ${Number(valorTotal).toFixed(2)}</span>
+                  <svg id="seta-${idAccordion}" class="w-4 h-4 text-slate-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
               </div>
-              <span class="font-bold text-rose-400">R$ ${Number(valorTotal).toFixed(2)}</span>
+              <div id="${idAccordion}" class="hidden bg-slate-900/90 px-3 py-2 border-t border-slate-700/60 space-y-1">
+                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">Ver lançamentos (${txsDoCartao.length})</span>
+                ${htmlTxs}
+              </div>
             </div>
           `;
         });
       }
 
+      let totalGeralSaidas = totalSaidas + totalFaturasMes;
+      let saldoLiquido = totalEntradas - totalGeralSaidas;
+
       document.getElementById('total-entradas').innerText = `R$ ${totalEntradas.toFixed(2)}`;
-      document.getElementById('total-saidas').innerText = `R$ ${totalSaidas.toFixed(2)}`;
+      document.getElementById('qtd-entradas').innerText = `${qtdEntradas} lançamento(s)`;
+      
+      document.getElementById('total-saidas').innerText = `R$ ${totalGeralSaidas.toFixed(2)}`;
+      document.getElementById('qtd-saidas').innerText = `${qtdSaidas} fixas(s) + Faturas`;
+      
+      document.getElementById('total-faturas').innerText = `R$ ${totalFaturasMes.toFixed(2)}`;
+      
+      const elSaldo = document.getElementById('saldo-liquido');
+      elSaldo.innerText = `R$ ${saldoLiquido.toFixed(2)}`;
+      elSaldo.className = saldoLiquido >= 0 ? "text-lg font-bold text-emerald-400" : "text-lg font-bold text-rose-400";
     }
 
     async function salvarCompromisso(e) {
@@ -191,16 +275,13 @@
       };
 
       try {
-        await fetch(URL_DO_WEB_APP, {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
+        await fetch(URL_DO_WEB_APP, { method: 'POST', body: JSON.stringify(payload) });
         fecharModal();
         document.getElementById('form-novo').reset();
         await carregarDados();
-        alert("Compromisso guardado com sucesso na planilha!");
+        alert("Compromisso guardado com sucesso!");
       } catch (err) {
-        alert("Erro ao guardar compromisso.");
+        alert("Erro ao guardar.");
       } finally {
         btn.innerText = "Salvar Compromisso";
         btn.disabled = false;
