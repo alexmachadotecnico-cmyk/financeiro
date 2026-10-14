@@ -12,11 +12,11 @@
   <header class="bg-[#14532d] shadow-md p-4 sticky top-0 z-50">
     <div class="max-w-md mx-auto flex justify-between items-center">
       <div>
-        <span class="text-[11px] uppercase tracking-wider text-emerald-200 block font-medium">Meu Financeiro</span>
-        <h1 id="titulo-mes" class="text-xl font-bold text-white">Outubro</h1>
+        <span class="text-[11px] uppercase tracking-wider text-emerald-200 block font-medium">MEU FINANCEIRO</span>
+        <h1 id="titulo-mes" class="text-xl font-bold text-white uppercase">OUTUBRO</h1>
       </div>
       <!-- Seletor de Mês -->
-      <select id="filtro-mes" onchange="renderizarDados()" class="bg-[#166534] text-xs text-white px-3 py-2 rounded-xl border border-emerald-600 focus:outline-none font-medium">
+      <select id="filtro-mes" onchange="renderizarDados()" class="bg-[#166534] text-xs text-white px-3 py-2 rounded-xl border border-emerald-600 focus:outline-none font-medium uppercase">
         <option value="10/2026" selected>OUTUBRO/2026</option>
         <option value="11/2026">NOVEMBRO/2026</option>
         <option value="12/2026">DEZEMBRO/2026</option>
@@ -26,33 +26,35 @@
 
   <main class="max-w-md mx-auto p-4 space-y-4">
 
-    <!-- Cards de Resumo (Entradas, Saídas e Saldo Líquido) -->
+    <!-- Cards de Resumo Clicáveis (ENTRADAS PREVISTAS e DESPESAS) -->
     <div class="grid grid-cols-2 gap-3">
-      <div class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow">
-        <span class="text-[11px] font-semibold text-emerald-400 block uppercase">Entradas Previstas</span>
+      <!-- Card Entradas Previstas (Clicável) -->
+      <div onclick="abrirDetalhes('entradas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-emerald-500 transition">
+        <span class="text-[11px] font-semibold text-emerald-400 block uppercase">ENTRADAS PREVISTAS</span>
         <span id="total-entradas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
         <span id="qtd-entradas" class="text-[10px] text-slate-400">0 lançamento(s)</span>
       </div>
-      <div class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow">
-        <span class="text-[11px] font-semibold text-rose-400 block uppercase">Fixas / Parcelas</span>
+      <!-- Card Despesas (Clicável) -->
+      <div onclick="abrirDetalhes('despesas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-rose-500 transition">
+        <span class="text-[11px] font-semibold text-rose-400 block uppercase">DESPESAS</span>
         <span id="total-saidas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
-        <span id="qtd-saidas" class="text-[10px] text-slate-400">0 compromisso(s)</span>
+        <span id="qtd-saidas" class="text-[10px] text-slate-400">0 fixa(s) + Faturas</span>
       </div>
     </div>
 
     <!-- Card de Saldo Líquido do Mês -->
     <div class="bg-gradient-to-r from-emerald-900/50 to-slate-800 border border-emerald-700/50 p-4 rounded-2xl shadow flex justify-between items-center">
       <div>
-        <span class="text-xs text-emerald-300 block font-medium">Saldo Líquido Projetado</span>
+        <span class="text-xs text-emerald-300 block font-medium uppercase">SALDO LÍQUIDO PROJETADO</span>
         <span class="text-[10px] text-slate-400">Entradas menos saídas e faturas</span>
       </div>
       <span id="saldo-liquido" class="text-lg font-bold text-emerald-400">R$ 0,00</span>
     </div>
 
-    <!-- Seção de Faturas de Cartão com Expansão -->
+    <!-- Seção de Faturas de Cartão (Apenas do Mês Corrente) -->
     <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow space-y-3">
       <div class="flex justify-between items-center border-b border-slate-700/60 pb-2">
-        <h2 class="text-sm font-semibold text-slate-200">Faturas de Cartão</h2>
+        <h2 class="text-sm font-semibold text-slate-200 uppercase">FATURAS DE CARTÃO</h2>
         <span id="total-faturas" class="text-xs font-bold text-rose-400">R$ 0,00</span>
       </div>
       <div id="lista-faturas" class="space-y-3">
@@ -60,56 +62,62 @@
       </div>
     </section>
 
-    <!-- Seção de Compromissos e Contas Fixas -->
-    <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow">
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="text-sm font-semibold text-slate-200">Compromissos do Mês</h2>
-        <button onclick="abrirModal()" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-3 py-1.5 rounded-xl font-medium transition shadow">+ Novo</button>
-      </div>
-      
-      <div id="lista-compromissos" class="space-y-2.5">
-        <div class="text-center py-4 text-slate-400 text-sm">A sincronizar...</div>
-      </div>
-    </section>
+    <!-- Botão flutuante ou fixo para adicionar -->
+    <div class="text-center pt-2">
+      <button onclick="abrirModal()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-3 rounded-xl transition shadow uppercase tracking-wider">+ ADICIONAR NOVO LANÇAMENTO</button>
+    </div>
 
   </main>
+
+  <!-- Modal de Detalhes (Aparece ao clicar nos cards de Entradas ou Despesas) -->
+  <div id="modal-detalhes" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-4 z-50">
+    <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[80vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+        <h3 id="modal-titulo" class="font-bold text-base text-slate-200 uppercase">DETALHES</h3>
+        <button onclick="fecharDetalhes()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <div id="modal-lista-detalhes" class="overflow-y-auto space-y-2.5 pr-1">
+        <!-- Injetado via JS -->
+      </div>
+    </div>
+  </div>
 
   <!-- Modal Cadastro Manual -->
   <div id="modal-cadastro" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
     <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center">
-        <h3 class="font-bold text-base text-slate-200">Adicionar Despesa / Receita</h3>
+        <h3 class="font-bold text-base text-slate-200 uppercase">ADICIONAR DESPESA / RECEITA</h3>
         <button onclick="fecharModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
       </div>
       <form id="form-novo" onsubmit="salvarCompromisso(event)" class="space-y-3">
         <div>
-          <label class="text-xs text-slate-400 block mb-1">Compromisso / Descrição</label>
+          <label class="text-xs text-slate-400 block mb-1 uppercase">Compromisso / Descrição</label>
           <input type="text" id="novo-nome" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Tipo</label>
+            <label class="text-xs text-slate-400 block mb-1 uppercase">Tipo</label>
             <select id="novo-tipo" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
-              <option value="SAIDA">Saída</option>
-              <option value="ENTRADA">Entrada</option>
+              <option value="SAIDA">SAÍDA</option>
+              <option value="ENTRADA">ENTRADA</option>
             </select>
           </div>
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Valor Total (R$)</label>
+            <label class="text-xs text-slate-400 block mb-1 uppercase">Valor Total (R$)</label>
             <input type="number" step="0.01" id="novo-valor" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Dia do Vencimento</label>
+            <label class="text-xs text-slate-400 block mb-1 uppercase">Dia do Vencimento</label>
             <input type="number" id="novo-dia" min="1" max="31" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
           </div>
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Qtd Parcelas</label>
+            <label class="text-xs text-slate-400 block mb-1 uppercase">Qtd Parcelas</label>
             <input type="number" id="novo-parcelas" min="1" max="48" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
           </div>
         </div>
-        <button type="submit" id="btn-salvar" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition text-sm shadow">Salvar Compromisso</button>
+        <button type="submit" id="btn-salvar" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition text-sm shadow uppercase">SALVAR COMPROMISSO</button>
       </form>
     </div>
   </div>
@@ -120,6 +128,68 @@
 
     function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
     function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
+
+    function abrirDetalhes(tipo) {
+      const modal = document.getElementById('modal-detalhes');
+      const titulo = document.getElementById('modal-titulo');
+      const lista = document.getElementById('modal-lista-detalhes');
+      lista.innerHTML = '';
+
+      const mesSelecionado = document.getElementById('filtro-mes').value; // "10/2026"
+      const [mesNum, anoNum] = mesSelecionado.split('/');
+
+      if (tipo === 'entradas') {
+        titulo.innerText = "DETALHES - ENTRADAS PREVISTAS & RECEBIDAS";
+        let entradasItens = dadosGlobais.compromissos.filter(i => i[1] === 'ENTRADA');
+        
+        entradasItens.forEach(item => {
+          let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal] = item;
+          let isReal = status.includes('RECEBIDO');
+          let val = isReal && valorReal !== "" ? Number(valorReal) : Number(valorPrevisto);
+          let dataHoraStr = isReal && item[7] ? `Data Baixa: ${item[7]}` : `Vencimento Previsto: Dia ${dia}/${mesNum}/${anoNum}`;
+
+          lista.innerHTML += `
+            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
+              <div>
+                <p class="text-sm font-semibold text-white">${compromisso}</p>
+                <span class="text-[11px] text-emerald-400 block">${dataHoraStr}</span>
+                <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">${status || 'PENDENTE'}</span>
+              </div>
+              <span class="font-bold text-emerald-400 text-sm">R$ ${val.toFixed(2)}</span>
+            </div>
+          `;
+        });
+      } else {
+        titulo.innerText = "DETALHES - DESPESAS & FATURAS";
+        let saidasItens = dadosGlobais.compromissos.filter(i => i[1] === 'SAIDA');
+
+        saidasItens.forEach(item => {
+          let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal] = item;
+          let isReal = status.includes('PAGO');
+          let val = isReal && valorReal !== "" ? Number(valorReal) : Number(valorPrevisto);
+          let dataHoraStr = isReal && item[7] ? `Data Baixa: ${item[7]}` : `Vencimento Previsto: Dia ${dia}/${mesNum}/${anoNum}`;
+
+          lista.innerHTML += `
+            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
+              <div>
+                <p class="text-sm font-semibold text-white">${compromisso}</p>
+                <span class="text-[11px] text-rose-400 block">${dataHoraStr}</span>
+                <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">${status || 'PENDENTE'}</span>
+              </div>
+              <span class="font-bold text-rose-400 text-sm">R$ ${val.toFixed(2)}</span>
+            </div>
+          `;
+        });
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function fecharDetalhes() {
+      document.getElementById('modal-detalhes').classList.add('hidden');
+      document.getElementById('modal-detalhes').classList.remove('flex');
+    }
 
     async function carregarDados() {
       try {
@@ -146,21 +216,19 @@
     function renderizarDados() {
       const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "10/2026"
       const [mesNum, anoNum] = mesSelecionado.split('/');
-      const nomesMeses = {"10": "Outubro", "11": "Novembro", "12": "Dezembro"};
-      document.getElementById('titulo-mes').innerText = nomesMeses[mesNum] || "Mês";
+      const nomesMeses = {"10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"};
+      document.getElementById('titulo-mes').innerText = nomesMeses[mesNum] || "MÊS";
 
-      let containerComp = document.getElementById('lista-compromissos');
       let containerFat = document.getElementById('lista-faturas');
-      containerComp.innerHTML = '';
       containerFat.innerHTML = '';
 
       let totalEntradas = 0;
       let qtdEntradas = 0;
-      let totalSaidas = 0;
+      let totalSaidasFixas = 0;
       let qtdSaidas = 0;
       let totalFaturasMes = 0;
 
-      // 1. Renderiza Compromissos
+      // 1. Calcula Entradas e Saídas Fixas
       dadosGlobais.compromissos.forEach(item => {
         let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
         let isRealizado = status.includes('PAGO') || status.includes('RECEBIDO');
@@ -171,54 +239,39 @@
           qtdEntradas++;
         }
         if (tipo === 'SAIDA') {
-          totalSaidas += valorExibido;
+          totalSaidasFixas += valorExibido;
           qtdSaidas++;
         }
-
-        let corStatus = isRealizado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-        let textoStatus = status !== "" ? status : 'PENDENTE';
-        let corValor = tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400';
-
-        containerComp.innerHTML += `
-          <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex justify-between items-center">
-            <div>
-              <p class="text-sm font-medium text-white">${compromisso}</p>
-              <span class="text-[11px] text-slate-400">Vencimento: Dia ${dia}</span>
-            </div>
-            <div class="text-right">
-              <span class="block text-sm font-bold ${corValor}">R$ ${valorExibido.toFixed(2)}</span>
-              <span class="text-[10px] ${corStatus} px-2 py-0.5 rounded font-medium">${textoStatus}</span>
-            </div>
-          </div>
-        `;
       });
 
-      // 2. Renderiza Faturas de Cartão e Transações Correspondentes
-      if (dadosGlobais.faturas.length === 0) {
-        containerFat.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">Nenhuma fatura registada.</div>';
-      } else {
-        dadosGlobais.faturas.forEach((fat, index) => {
-          let [cartao, vencimento, valorTotal, minimo, estado, billId] = fat;
-          
-          // Filtra faturas pelo mês selecionado se a data de vencimento corresponder
-          if (vencimento && vencimento.includes(`/${mesNum}/${anoNum}`)) {
-            totalFaturasMes += Number(valorTotal) || 0;
-          }
+      // 2. Renderiza Apenas Faturas do Mês Corrente Selecionado
+      let faturasDoMes = dadosGlobais.faturas.filter(fat => {
+        let vencimento = fat[1]; // Ex: "14/10/2026" ou ISO date
+        return vencimento && (vencimento.includes(`/${mesNum}/${anoNum}`) || vencimento.startsWith(`${anoNum}-${mesNum}`));
+      });
 
-          // Transações vinculadas a este cartão no mês
+      if (faturasDoMes.length === 0) {
+        containerFat.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">Nenhuma fatura para este mês.</div>';
+      } else {
+        faturasDoMes.forEach((fat, index) => {
+          let [cartao, vencimento, valorTotal, minimo, estado, billId] = fat;
+          totalFaturasMes += Number(valorTotal) || 0;
+
           let txsDoCartao = dadosGlobais.transacoes.filter(tx => {
-            let dataTx = tx[0]; // Data "DD/MM/YYYY"
+            let dataTx = tx[0]; // "DD/MM/YYYY"
             let contaTx = tx[1]; // Nome do cartão
             return contaTx.toLowerCase().includes(cartao.toLowerCase()) && dataTx && dataTx.includes(`/${mesNum}/${anoNum}`);
           });
 
           let idAccordion = `fatura-${index}`;
-
           let htmlTxs = txsDoCartao.length === 0 
             ? '<div class="text-[11px] text-slate-400 py-1">Sem lançamentos detalhados para este período.</div>' 
             : txsDoCartao.map(tx => `
                 <div class="flex justify-between items-center text-xs py-1 border-b border-slate-700/40 last:border-0">
-                  <span class="text-slate-300 truncate max-w-[200px]">${tx[3]}</span>
+                  <div>
+                    <span class="text-slate-300 block">${tx[3]}</span>
+                    <span class="text-[9px] text-slate-500">${tx[0]}</span>
+                  </div>
                   <span class="text-rose-400 font-semibold">R$ ${Math.abs(Number(tx[7])).toFixed(2)}</span>
                 </div>
               `).join('');
@@ -227,7 +280,7 @@
             <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
               <div onclick="toggleFatura('${idAccordion}')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
                 <div>
-                  <span class="font-semibold text-white block text-sm">${cartao}</span>
+                  <span class="font-semibold text-white block text-sm uppercase">${cartao}</span>
                   <span class="text-[11px] text-slate-400">Vencimento: ${vencimento}</span>
                 </div>
                 <div class="flex items-center space-x-2">
@@ -236,7 +289,7 @@
                 </div>
               </div>
               <div id="${idAccordion}" class="hidden bg-slate-900/90 px-3 py-2 border-t border-slate-700/60 space-y-1">
-                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">Ver lançamentos (${txsDoCartao.length})</span>
+                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">VER LANÇAMENTOS (${txsDoCartao.length})</span>
                 ${htmlTxs}
               </div>
             </div>
@@ -244,14 +297,14 @@
         });
       }
 
-      let totalGeralSaidas = totalSaidas + totalFaturasMes;
-      let saldoLiquido = totalEntradas - totalGeralSaidas;
+      let totalGeralDespesas = totalSaidasFixas + totalFaturasMes;
+      let saldoLiquido = totalEntradas - totalGeralDespesas;
 
       document.getElementById('total-entradas').innerText = `R$ ${totalEntradas.toFixed(2)}`;
       document.getElementById('qtd-entradas').innerText = `${qtdEntradas} lançamento(s)`;
       
-      document.getElementById('total-saidas').innerText = `R$ ${totalGeralSaidas.toFixed(2)}`;
-      document.getElementById('qtd-saidas').innerText = `${qtdSaidas} fixas(s) + Faturas`;
+      document.getElementById('total-saidas').innerText = `R$ ${totalGeralDespesas.toFixed(2)}`;
+      document.getElementById('qtd-saidas').innerText = `${qtdSaidas} fixa(s) + Faturas`;
       
       document.getElementById('total-faturas').innerText = `R$ ${totalFaturasMes.toFixed(2)}`;
       
@@ -263,7 +316,7 @@
     async function salvarCompromisso(e) {
       e.preventDefault();
       const btn = document.getElementById('btn-salvar');
-      btn.innerText = "A guardar...";
+      btn.innerText = "A GUARDAR...";
       btn.disabled = true;
 
       const payload = {
@@ -283,7 +336,7 @@
       } catch (err) {
         alert("Erro ao guardar.");
       } finally {
-        btn.innerText = "Salvar Compromisso";
+        btn.innerText = "SALVAR COMPROMISSO";
         btn.disabled = false;
       }
     }
