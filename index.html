@@ -205,7 +205,7 @@
     }
 
     function renderizarDados() {
-      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "10/2026"
+      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "11/2026"
       const [mesNum, anoNum] = mesSelecionado.split('/');
       const nomesMeses = {"10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"};
       document.getElementById('titulo-mes').innerText = nomesMeses[mesNum] || "MÊS";
@@ -228,66 +228,62 @@
         if (tipo === 'SAIDA') { totalSaidasFixas += valorExibido; qtdSaidas++; }
       });
 
-      let faturasDoMes = dadosGlobais.faturas.filter(fat => {
-        let vencimento = fat[1];
-        return vencimento && (vencimento.includes(`/${mesNum}/${anoNum}`) || vencimento.startsWith(`${anoNum}-${mesNum}`));
-      });
+      // Tabela fixa com os valores reais informados para cada mês
+      const valoresFaturasReais = {
+        "10/2026": 1166.11, // Outubro (Valor da Pluggy/Planilha)
+        "11/2026": 345.27,  // Novembro (Valor real informado)
+        "12/2026": 213.61   // Dezembro (Valor real informado)
+      };
 
-      if (faturasDoMes.length === 0 && dadosGlobais.faturas.length > 0) {
-        let mediaFatura = dadosGlobais.faturas.reduce((acc, f) => acc + (Number(f[2]) || 0), 0) / dadosGlobais.faturas.length || 1100.00;
-        faturasDoMes = [["GOLD (Projeção)", `14/${mesNum}/${anoNum}`, mediaFatura, mediaFatura * 0.15, "PROJECTED", "proj-" + mesNum]];
-      }
+      let valorFaturaDoMes = valoresFaturasReais[mesSelecionado] || 0;
+      totalFaturasMes = valorFaturaDoMes;
 
-      if (faturasDoMes.length === 0) {
-        containerFat.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">Nenhuma fatura para este mês.</div>';
-      } else {
-        faturasDoMes.forEach((fat, index) => {
-          let [cartao, vencimento, valorTotal, minimo, estado, billId] = fat;
-          totalFaturasMes += Number(valorTotal) || 0;
+      let faturasDoMes = [
+        ["GOLD (Cartão)", `14/${mesNum}/${anoNum}`, valorFaturaDoMes, valorFaturaDoMes * 0.15, "PROJECTION", "proj-" + mesNum]
+      ];
 
-          // Cruza as transações da aba Transações pelo nome do cartão ou tipo de conta de crédito
-          let txsDoCartao = dadosGlobais.transacoes.filter(tx => {
-            let contaTx = String(tx[1]).toLowerCase();
-            let origemTx = String(tx[2]).toLowerCase();
-            let cartaoBusca = String(cartao).toLowerCase();
-            return contaTx.includes(cartaoBusca) || cartaoBusca.includes(contaTx) || origemTx.includes('cartão') || contaTx.includes('gold');
-          });
+      faturasDoMes.forEach((fat, index) => {
+        let [cartao, vencimento, valorTotal] = fat;
 
-          let txsExibicao = txsDoCartao.slice(0, 20);
-          let idAccordion = `fatura-${index}`;
+        let txsDoCartao = dadosGlobais.transacoes.filter(tx => {
+          let contaTx = String(tx[1]).toLowerCase();
+          return contaTx.includes("gold") || contaTx.includes("cartão");
+        });
 
-          let htmlTxs = txsExibicao.length === 0 
-            ? '<div class="text-[11px] text-slate-400 py-1">Sem transações detalhadas associadas.</div>' 
-            : txsExibicao.map(tx => `
-                <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
-                  <div>
-                    <span class="text-slate-200 font-medium block">${tx[3]}</span>
-                    <span class="text-[10px] text-slate-400">${tx[0]} • ${tx[1]}</span>
-                  </div>
-                  <span class="text-rose-400 font-bold">R$ ${Math.abs(Number(tx[7])).toFixed(2)}</span>
-                </div>
-              `).join('');
+        let txsExibicao = txsDoCartao.slice(0, 15);
+        let idAccordion = `fatura-${index}`;
 
-          containerFat.innerHTML += `
-            <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
-              <div onclick="toggleFatura('${idAccordion}')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
+        let htmlTxs = txsExibicao.length === 0 
+          ? '<div class="text-[11px] text-slate-400 py-1">Sem transações detalhadas associadas.</div>' 
+          : txsExibicao.map(tx => `
+              <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
                 <div>
-                  <span class="font-semibold text-white block text-sm uppercase">${cartao}</span>
-                  <span class="text-[11px] text-slate-400">Vencimento: ${vencimento}</span>
+                  <span class="text-slate-200 font-medium block">${tx[3]}</span>
+                  <span class="text-[10px] text-slate-400">${tx[0]} • ${tx[1]}</span>
                 </div>
-                <div class="flex items-center space-x-2">
-                  <span class="font-bold text-rose-400 text-sm">R$ ${Number(valorTotal).toFixed(2)}</span>
-                  <svg id="seta-${idAccordion}" class="w-4 h-4 text-slate-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
+                <span class="text-rose-400 font-bold">R$ ${Math.abs(Number(tx[7])).toFixed(2)}</span>
               </div>
-              <div id="${idAccordion}" class="hidden bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
-                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">VER LANÇAMENTOS (${txsExibicao.length})</span>
-                ${htmlTxs}
+            `).join('');
+
+        containerFat.innerHTML += `
+          <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
+            <div onclick="toggleFatura('${idAccordion}')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
+              <div>
+                <span class="font-semibold text-white block text-sm uppercase">${cartao}</span>
+                <span class="text-[11px] text-slate-400">Vencimento: ${vencimento}</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-rose-400 text-sm">R$ ${Number(valorTotal).toFixed(2)}</span>
+                <svg id="seta-${idAccordion}" class="w-4 h-4 text-slate-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </div>
-          `;
-        });
-      }
+            <div id="${idAccordion}" class="hidden bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
+              <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">VER LANÇAMENTOS (${txsExibicao.length})</span>
+              ${htmlTxs}
+            </div>
+          </div>
+        `;
+      });
 
       let totalGeralDespesas = totalSaidasFixas + totalFaturasMes;
       let saldoLiquido = totalEntradas - totalGeralDespesas;
