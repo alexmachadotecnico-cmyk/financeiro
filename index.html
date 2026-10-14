@@ -51,7 +51,7 @@
       <span id="saldo-liquido" class="text-lg font-bold text-emerald-400">R$ 0,00</span>
     </div>
 
-    <!-- Seção de Faturas de Cartão (Apenas do Mês Corrente) -->
+    <!-- Seção de Faturas de Cartão (Com Projeção Inteligente) -->
     <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow space-y-3">
       <div class="flex justify-between items-center border-b border-slate-700/60 pb-2">
         <h2 class="text-sm font-semibold text-slate-200 uppercase">FATURAS DE CARTÃO</h2>
@@ -212,7 +212,7 @@
     }
 
     function renderizarDados() {
-      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "10/2026"
+      const mesSelecionado = document.getElementById('filtro-mes').value; // ex: "11/2026"
       const [mesNum, anoNum] = mesSelecionado.split('/');
       const nomesMeses = {"10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"};
       document.getElementById('titulo-mes').innerText = nomesMeses[mesNum] || "MÊS";
@@ -242,11 +242,23 @@
         }
       });
 
-      // 2. Renderiza Apenas Faturas do Mês Corrente Selecionado
+      // 2. Filtra Faturas do Mês Selecionado ou Cria Projeção Inteligente se não existir
       let faturasDoMes = dadosGlobais.faturas.filter(fat => {
-        let vencimento = fat[1]; // Ex: "14/10/2026"
+        let vencimento = fat[1]; // Ex: "14/11/2026"
         return vencimento && (vencimento.includes(`/${mesNum}/${anoNum}`) || vencimento.startsWith(`${anoNum}-${mesNum}`));
       });
+
+      // Se não houver fatura oficial da Pluggy para o mês (ex: Novembro), calcula uma projeção baseada na média dos meses anteriores
+      if (faturasDoMes.length === 0 && dadosGlobais.faturas.length > 0) {
+        let somaFaturasAnteriores = dadosGlobais.faturas.reduce((acc, f) => acc + (Number(f[2]) || 0), 0);
+        let mediaFatura = somaFaturasAnteriores / dadosGlobais.faturas.length;
+        if (mediaFatura <= 0) mediaFatura = 1100.00; // Valor base de segurança
+
+        // Cria um card de projeção para o cartão principal (ex: Gold)
+        faturasDoMes = [
+          ["GOLD (Projeção)", `14/${mesNum}/${anoNum}`, mediaFatura, mediaFatura * 0.15, "PROJECTED", "proj-" + mesNum]
+        ];
+      }
 
       if (faturasDoMes.length === 0) {
         containerFat.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">Nenhuma fatura para este mês.</div>';
@@ -255,20 +267,16 @@
           let [cartao, vencimento, valorTotal, minimo, estado, billId] = fat;
           totalFaturasMes += Number(valorTotal) || 0;
 
-          // Pega as transações recentes de crédito (exclui o filtro restrito de mês para garantir exibição do extrato da fatura atual)
           let txsDoCartao = dadosGlobais.transacoes.filter(tx => {
             let contaTx = String(tx[1]).toLowerCase();
-            let direcao = String(tx[6]); // CREDIT ou DEBIT
-            // Considera transações do cartão do tipo débito/crédito vinculadas ao cartão
-            return contaTx.includes(String(cartao).toLowerCase()) || contaTx.includes("gold") || contaTx.includes("cartão");
+            return contaTx.includes(String(cartao).toLowerCase().replace(" (projeção)", "")) || contaTx.includes("gold") || contaTx.includes("cartão");
           });
 
-          // Limita para exibir as últimas transações do cartão se houver muitas
           let txsExibicao = txsDoCartao.slice(0, 15);
-
           let idAccordion = `fatura-${index}`;
+
           let htmlTxs = txsExibicao.length === 0 
-            ? '<div class="text-[11px] text-slate-400 py-1">Sem lançamentos detalhados para este período.</div>' 
+            ? '<div class="text-[11px] text-slate-400 py-1">Valor projetado com base no histórico de consumo.</div>' 
             : txsExibicao.map(tx => `
                 <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
                   <div>
@@ -292,7 +300,7 @@
                 </div>
               </div>
               <div id="${idAccordion}" class="hidden bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
-                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">VER LANÇAMENTOS (${txsExibicao.length})</span>
+                <span class="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold mb-1">DETALHES DA PROJEÇÃO</span>
                 ${htmlTxs}
               </div>
             </div>
