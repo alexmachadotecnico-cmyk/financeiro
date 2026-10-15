@@ -13,22 +13,10 @@
     <div class="max-w-md mx-auto flex justify-between items-center">
       <div>
         <span class="text-[11px] uppercase tracking-wider text-emerald-200 block font-medium">MEU FINANCEIRO</span>
-        <h1 id="titulo-mes" class="text-xl font-bold text-white uppercase">OUTUBRO</h1>
+        <h1 id="titulo-mes" class="text-xl font-bold text-white uppercase">CARREGANDO...</h1>
       </div>
-      <!-- Seletor de Mês (De Maio/2026 até Abril/2027) -->
+      <!-- Seletor de Mês Dinâmico e Perpétuo -->
       <select id="filtro-mes" onchange="renderizarDados()" class="bg-[#166534] text-xs text-white px-3 py-2 rounded-xl border border-emerald-600 focus:outline-none font-medium uppercase">
-        <option value="05/2026">MAIO/2026</option>
-        <option value="06/2026">JUNHO/2026</option>
-        <option value="07/2026">JULHO/2026</option>
-        <option value="08/2026">AGOSTO/2026</option>
-        <option value="09/2026">SETEMBRO/2026</option>
-        <option value="10/2026" selected>OUTUBRO/2026</option>
-        <option value="11/2026">NOVEMBRO/2026</option>
-        <option value="12/2026">DEZEMBRO/2026</option>
-        <option value="01/2027">JANEIRO/2027</option>
-        <option value="02/2027">FEVEREIRO/2027</option>
-        <option value="03/2027">MARÇO/2027</option>
-        <option value="04/2027">ABRIL/2027</option>
       </select>
     </div>
   </header>
@@ -135,6 +123,41 @@
     let dadosGlobais = { compromissos: [], faturas: [], transacoes: [], faturasDetalhadas: [] };
     let mapaFaturasPorCompetencia = {};
 
+    const NOMES_MESES = {
+      "01": "JANEIRO", "02": "FEVEREIRO", "03": "MARÇO", "04": "ABRIL",
+      "05": "MAIO", "06": "JUNHO", "07": "JULHO", "08": "AGOSTO",
+      "09": "SETEMBRO", "10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"
+    };
+
+    function obterCompetenciaAtual() {
+      const hoje = new Date();
+      const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+      const ano = hoje.getFullYear();
+      return `${mes}/${ano}`;
+    }
+
+    function inicializarSeletorMeses() {
+      const select = document.getElementById('filtro-mes');
+      const compAtual = obterCompetenciaAtual();
+      const [mesAt, anoAt] = compAtual.split('/').map(Number);
+
+      // Gera janela perpétua desde Maio/2026 até 18 meses à frente do mês atual
+      const inicioIdx = 2026 * 12 + 4; // Maio/2026 (0-based = 4)
+      const fimIdx = (anoAt * 12 + (mesAt - 1)) + 18;
+
+      select.innerHTML = '';
+      for (let idx = inicioIdx; idx <= fimIdx; idx++) {
+        const a = Math.floor(idx / 12);
+        const m = String((idx % 12) + 1).padStart(2, '0');
+        const valor = `${m}/${a}`;
+        const opt = document.createElement('option');
+        opt.value = valor;
+        opt.textContent = `${NOMES_MESES[m]}/${a}`;
+        if (valor === compAtual) opt.selected = true;
+        select.appendChild(opt);
+      }
+    }
+
     function parseNum(v) {
       if (typeof v === 'number') return v;
       if (!v) return 0;
@@ -173,372 +196,4 @@
       if (!dias) return dataBr;
       const p = String(dataBr).split('/');
       if (p.length !== 3) return dataBr;
-      const d = new Date(Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10) + dias));
-      const dia = String(d.getUTCDate()).padStart(2, '0');
-      const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
-      const ano = d.getUTCFullYear();
-      return `${dia}/${mes}/${ano}`;
-    }
-
-    function timestampDataBr(dataBr) {
-      const p = String(dataBr).split('/');
-      return p.length === 3 ? Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10)) : 0;
-    }
-
-    function extrairInfoTransacaoReal(idTransacao) {
-      if (!idTransacao) return 'CONFIRMADO NA PLANILHA';
-      const txReal = (dadosGlobais.transacoes || []).find(t => String(t[13]).trim() === String(idTransacao).trim());
-      if (!txReal) return 'CONFIRMADO VIA OPEN FINANCE';
-      const metodo = String(txReal[9] || 'PIX').toUpperCase();
-      return `MÉTODO: ${metodo} • ID: ${String(idTransacao).substring(0, 8).toUpperCase()}`;
-    }
-
-    /**
-     * Aplica as 4 Regras Contábeis diretamente sobre os dados da planilha Nubank_Pluggy:
-     * 1. Detecta e corrige eventual deslocamento de -1 dia do fuso UTC-4
-     * 2. Agrupa pelo ciclo real do Nubank: dia 08 (inclusive) a dia 07 do mês seguinte (inclusive)
-     * 3. Ignora "Pagamento recebido" e subtrai estornos (CREDIT)
-     * 4. Usa estritamente os lançamentos reais da aba Transações (sem duplicar parcelas)
-     */
-    function construirFaturasDaPlanilha() {
-      mapaFaturasPorCompetencia = {};
-
-      // Mapeia faturas oficiais fechadas da aba Faturas para referência de vencimento e ajuste de arredondamento (<= 0,05)
-      const faturasOficiais = {};
-      (dadosGlobais.faturas || []).forEach(f => {
-        const vencBr = formatarDataBr(f[1]);
-        const p = vencBr.split('/');
-        if (p.length === 3) {
-          const comp = `${p[1]}/${p[2]}`;
-          faturasOficiais[comp] = {
-            cartao: String(f[0] || 'GOLD').toUpperCase(),
-            vencimento: vencBr,
-            valorTotal: Number(parseNum(f[2]).toFixed(2))
-          };
-        }
-      });
-
-      const txs = dadosGlobais.transacoes || [];
-
-      // Regra 1: Detecta se as parcelas de abertura de ciclo ("Parcela 2/", "3/", "6/", "7/") estão no dia 07 (UTC-4) ou 08 (BRT/UTC)
-      let qtdDia07 = 0;
-      let qtdDia08 = 0;
-      txs.forEach(tx => {
-        const conta = String(tx[1] || '').toLowerCase();
-        const origem = String(tx[2] || '').toLowerCase();
-        if (!origem.includes('crédito') && !conta.includes('gold')) return;
-        const desc = String(tx[3] || '').toLowerCase();
-        if (desc.includes('parcela 2/') || desc.includes('parcela 3/') || desc.includes('parcela 6/') || desc.includes('parcela 7/')) {
-          const dBr = formatarDataBr(tx[0]);
-          const p = dBr.split('/');
-          if (p.length === 3) {
-            const dia = parseInt(p[0], 10);
-            if (dia === 7) qtdDia07++;
-            if (dia === 8) qtdDia08++;
-          }
-        }
-      });
-      const deslocamentoDias = (qtdDia07 > qtdDia08) ? 1 : 0;
-
-      const itensPorComp = {};
-
-      txs.forEach(tx => {
-        const conta = String(tx[1] || '').toLowerCase();
-        const origem = String(tx[2] || '').toLowerCase();
-        if (!origem.includes('crédito') && !conta.includes('gold')) return;
-
-        const dataOriginal = formatarDataBr(tx[0]);
-        if (!dataOriginal) return;
-
-        const dataRealBr = somarDiasBr(dataOriginal, deslocamentoDias);
-        const p = dataRealBr.split('/');
-        if (p.length !== 3) return;
-
-        const dia = parseInt(p[0], 10);
-        const mes = parseInt(p[1], 10);
-        const ano = parseInt(p[2], 10);
-
-        if (ano < 2026 || (ano === 2026 && mes < 4)) return;
-
-        const desc = String(tx[3] || '').trim();
-        const descLower = desc.toLowerCase();
-
-        // Regra 3: Ignora "Pagamento recebido" (pagamento da fatura anterior)
-        if (descLower === 'pagamento recebido' || descLower.includes('pagamento de fatura')) return;
-
-        const direcao = String(tx[6] || '').toUpperCase();
-        const valorBruto = parseNum(tx[7]);
-        const valorAbs = Math.abs(valorBruto);
-        if (valorAbs === 0) return;
-
-        // Estornos de compra ou IOF no cartão vêm como CREDIT -> subtraem da fatura
-        const ehEstorno = (direcao === 'CREDIT' || valorBruto < 0);
-        const valorAssinado = ehEstorno ? -valorAbs : valorAbs;
-
-        // Regra 2: Corte do Nubank (08/Mês_Anterior até 07/Mês_Vencimento)
-        let mesFat = dia >= 8 ? mes + 1 : mes;
-        let anoFat = ano;
-        if (mesFat > 12) {
-          mesFat = 1;
-          anoFat++;
-        }
-        const comp = `${String(mesFat).padStart(2, '0')}/${anoFat}`;
-
-        const parcelaCol = String(tx[8] || '').trim();
-        const rotuloParcela = ehEstorno ? 'ESTORNO / CRÉDITO' : (parcelaCol ? `PARCELA ${parcelaCol}` : 'À VISTA');
-
-        if (!itensPorComp[comp]) itensPorComp[comp] = [];
-        itensPorComp[comp].push({
-          data: dataRealBr,
-          descricao: desc.toUpperCase(),
-          parcela: rotuloParcela.toUpperCase(),
-          valor: Number(valorAssinado.toFixed(2)),
-          ehEstorno: ehEstorno
-        });
-      });
-
-      Object.keys(itensPorComp).forEach(comp => {
-        const lista = itensPorComp[comp];
-        lista.sort((a, b) => timestampDataBr(b.data) - timestampDataBr(a.data));
-
-        const somaCalculada = Number(lista.reduce((acc, it) => acc + it.valor, 0).toFixed(2));
-        const oficial = faturasOficiais[comp];
-
-        // Se existir fatura fechada na aba Faturas e a diferença for apenas de arredondamento de centavos (<= R$ 0,05), usa o valor oficial
-        const valorFinalFatura = (oficial && Math.abs(oficial.valorTotal - somaCalculada) <= 0.05)
-          ? oficial.valorTotal
-          : somaCalculada;
-
-        mapaFaturasPorCompetencia[comp] = {
-          cartao: oficial ? oficial.cartao : 'GOLD',
-          vencimento: oficial ? oficial.vencimento : `14/${comp}`,
-          valorTotal: valorFinalFatura,
-          somaExtrato: somaCalculada,
-          itens: lista
-        };
-      });
-    }
-
-    function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
-    function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
-
-    function abrirDetalhes(tipo) {
-      const modal = document.getElementById('modal-detalhes');
-      const titulo = document.getElementById('modal-titulo');
-      const lista = document.getElementById('modal-lista-detalhes');
-      lista.innerHTML = '';
-
-      const mesSelecionado = document.getElementById('filtro-mes').value;
-      const [mesNum, anoNum] = mesSelecionado.split('/');
-      const ehOutubro2026 = (mesSelecionado === '10/2026');
-
-      if (tipo === 'entradas') {
-        titulo.innerText = "DETALHES - ENTRADAS PREVISTAS & RECEBIDAS";
-        dadosGlobais.compromissos.filter(i => String(i[1]).toUpperCase() === 'ENTRADA').forEach(item => {
-          let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
-          let isReal = ehOutubro2026 && String(status).toUpperCase().includes('RECEBIDO');
-          let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-          let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
-          let dataStr = isReal && dataBaixa
-            ? `RECEBIDO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`
-            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`;
-          let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
-          let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-
-          lista.innerHTML += `
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
-              <div class="pr-2">
-                <p class="text-sm font-semibold text-white uppercase">${compromisso}</p>
-                <span class="text-[10px] text-emerald-400 block uppercase mt-0.5">${dataStr}</span>
-                <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
-              </div>
-              <span class="font-bold text-emerald-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
-            </div>
-          `;
-        });
-      } else {
-        titulo.innerText = "DETALHES - DESPESAS DO MÊS";
-        dadosGlobais.compromissos.filter(i => String(i[1]).toUpperCase() === 'SAIDA').forEach(item => {
-          let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
-          let isReal = ehOutubro2026 && String(status).toUpperCase().includes('PAGO');
-          let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-          let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
-          let dataStr = isReal && dataBaixa
-            ? `PAGO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • FAV.: ${String(regra || compromisso).toUpperCase()}`
-            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • FAV.: ${String(regra || compromisso).toUpperCase()}`;
-          let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
-          let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-
-          lista.innerHTML += `
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
-              <div class="pr-2">
-                <p class="text-sm font-semibold text-white uppercase">${compromisso}</p>
-                <span class="text-[10px] text-rose-400 block uppercase mt-0.5">${dataStr}</span>
-                <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
-              </div>
-              <span class="font-bold text-rose-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
-            </div>
-          `;
-        });
-      }
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
-
-    function fecharDetalhes() {
-      document.getElementById('modal-detalhes').classList.add('hidden');
-      document.getElementById('modal-detalhes').classList.remove('flex');
-    }
-
-    async function carregarDados() {
-      try {
-        const resposta = await fetch(URL_DO_WEB_APP);
-        dadosGlobais = await resposta.json();
-        construirFaturasDaPlanilha();
-        renderizarDados();
-      } catch (e) {
-        console.error("Erro ao carregar dados:", e);
-      }
-    }
-
-    function toggleFatura(id) {
-      const el = document.getElementById(id);
-      const seta = document.getElementById('seta-' + id);
-      if (el.classList.contains('hidden')) {
-        el.classList.remove('hidden');
-        seta.style.transform = 'rotate(180deg)';
-      } else {
-        el.classList.add('hidden');
-        seta.style.transform = 'rotate(0deg)';
-      }
-    }
-
-    function renderizarDados() {
-      const mesSelecionado = document.getElementById('filtro-mes').value;
-      const [mesNum, anoNum] = mesSelecionado.split('/');
-      const nomesMeses = {
-        "05": "MAIO", "06": "JUNHO", "07": "JULHO", "08": "AGOSTO",
-        "09": "SETEMBRO", "10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO",
-        "01": "JANEIRO", "02": "FEVEREIRO", "03": "MARÇO", "04": "ABRIL"
-      };
-      document.getElementById('titulo-mes').innerText = `${nomesMeses[mesNum] || "MÊS"} ${anoNum}`;
-
-      let mesAnt = Number(mesNum) === 1 ? 12 : Number(mesNum) - 1;
-      let anoAnt = Number(mesNum) === 1 ? Number(anoNum) - 1 : Number(anoNum);
-      document.getElementById('subtitulo-ciclo').innerText = `CICLO: 08/${String(mesAnt).padStart(2, '0')}/${anoAnt} A 07/${mesNum}/${anoNum} • VENC. 14/${mesNum}/${anoNum}`;
-
-      let containerFat = document.getElementById('lista-faturas');
-      containerFat.innerHTML = '';
-
-      let totalEntradas = 0;
-      let qtdEntradas = 0;
-      let totalSaidasFixas = 0;
-      let qtdSaidas = 0;
-      const ehOutubro2026 = (mesSelecionado === '10/2026');
-
-      dadosGlobais.compromissos.forEach(item => {
-        let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
-        let isRealizado = ehOutubro2026 && (String(status).includes('PAGO') || String(status).includes('RECEBIDO'));
-        let valorExibido = (isRealizado && valorReal !== "" && !isNaN(parseNum(valorReal))) ? parseNum(valorReal) : parseNum(valorPrevisto);
-        
-        if (String(tipo).toUpperCase() === 'ENTRADA') { totalEntradas += valorExibido; qtdEntradas++; }
-        if (String(tipo).toUpperCase() === 'SAIDA') { totalSaidasFixas += valorExibido; qtdSaidas++; }
-      });
-
-      const faturaObj = mapaFaturasPorCompetencia[mesSelecionado] || {
-        cartao: 'GOLD',
-        vencimento: `14/${mesSelecionado}`,
-        valorTotal: 0,
-        somaExtrato: 0,
-        itens: []
-      };
-
-      const totalFaturasMes = Number(faturaObj.valorTotal || 0);
-      const itensExtrato = faturaObj.itens || [];
-
-      let htmlTxs = itensExtrato.length === 0
-        ? '<div class="text-[11px] text-slate-400 py-1 uppercase">SEM LANÇAMENTOS NESTE CICLO.</div>'
-        : itensExtrato.map(it => {
-            const corValor = it.ehEstorno ? 'text-emerald-400' : 'text-rose-400';
-            const sinal = it.ehEstorno ? '- R$ ' : 'R$ ';
-            return `
-              <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
-                <div class="pr-2">
-                  <span class="text-slate-200 font-medium block uppercase">${it.descricao}</span>
-                  <span class="text-[10px] text-slate-400 uppercase">${it.data} • ${it.parcela}</span>
-                </div>
-                <span class="${corValor} font-bold whitespace-nowrap">${sinal}${formatarMoeda(Math.abs(it.valor))}</span>
-              </div>
-            `;
-          }).join('');
-
-      containerFat.innerHTML += `
-        <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
-          <div onclick="toggleFatura('fatura-unica')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
-            <div>
-              <span class="font-semibold text-white block text-sm uppercase">NUBANK (${faturaObj.cartao})</span>
-              <span class="text-[11px] text-slate-400 uppercase">VENCIMENTO: ${faturaObj.vencimento}</span>
-            </div>
-            <div class="flex items-center space-x-2">
-              <span class="font-bold text-rose-400 text-sm">R$ ${formatarMoeda(totalFaturasMes)}</span>
-              <svg id="seta-fatura-unica" class="w-4 h-4 text-slate-400 transition-transform duration-200" style="transform: rotate(180deg);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </div>
-          </div>
-          <div id="fatura-unica" class="bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
-            <div class="flex justify-between items-center mb-1">
-              <span class="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">EXTRATO DA FATURA (${itensExtrato.length} LANÇAMENTOS)</span>
-              <span class="text-[10px] text-slate-300 uppercase font-semibold">SOMA LÍQUIDA: R$ ${formatarMoeda(faturaObj.somaExtrato)}</span>
-            </div>
-            ${htmlTxs}
-          </div>
-        </div>
-      `;
-
-      let totalGeralDespesas = totalSaidasFixas + totalFaturasMes;
-      let saldoLiquido = totalEntradas - totalGeralDespesas;
-
-      document.getElementById('total-entradas').innerText = `R$ ${formatarMoeda(totalEntradas)}`;
-      document.getElementById('qtd-entradas').innerText = `${qtdEntradas} LANÇAMENTO(S)`;
-      
-      document.getElementById('total-saidas').innerText = `R$ ${formatarMoeda(totalGeralDespesas)}`;
-      document.getElementById('qtd-saidas').innerText = `${qtdSaidas} FIXA(S) + FATURA`;
-      
-      document.getElementById('total-faturas').innerText = `R$ ${formatarMoeda(totalFaturasMes)}`;
-      
-      const elSaldo = document.getElementById('saldo-liquido');
-      elSaldo.innerText = `R$ ${formatarMoeda(saldoLiquido)}`;
-      elSaldo.className = saldoLiquido >= 0 ? "text-lg font-bold text-emerald-400" : "text-lg font-bold text-rose-400";
-    }
-
-    async function salvarCompromisso(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btn-salvar');
-      btn.innerText = "A GUARDAR...";
-      btn.disabled = true;
-
-      const payload = {
-        nome: document.getElementById('novo-nome').value,
-        tipo: document.getElementById('novo-tipo').value,
-        valor: document.getElementById('novo-valor').value,
-        dia: document.getElementById('novo-dia').value,
-        parcelas: document.getElementById('novo-parcelas').value
-      };
-
-      try {
-        await fetch(URL_DO_WEB_APP, { method: 'POST', body: JSON.stringify(payload) });
-        fecharModal();
-        document.getElementById('form-novo').reset();
-        await carregarDados();
-        alert("COMPROMISSO GUARDADO COM SUCESSO!");
-      } catch (err) {
-        alert("ERRO AO GUARDAR.");
-      } finally {
-        btn.innerText = "SALVAR COMPROMISSO";
-        btn.disabled = false;
-      }
-    }
-
-    carregarDados();
-  </script>
-</body>
-</html>
+      const d = new Date(Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10)
