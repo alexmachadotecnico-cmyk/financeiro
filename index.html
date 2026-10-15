@@ -15,7 +15,7 @@
         <span class="text-[11px] uppercase tracking-wider text-emerald-200 block font-medium">MEU FINANCEIRO</span>
         <h1 id="titulo-mes" class="text-xl font-bold text-white uppercase">OUTUBRO 2026</h1>
       </div>
-      <!-- Seletor de Mês -->
+      <!-- Seletor de Mês (Expande automaticamente conforme novas parcelas) -->
       <select id="filtro-mes" onchange="renderizarDados()" class="bg-[#166534] text-xs text-white px-3 py-2 rounded-xl border border-emerald-600 focus:outline-none font-medium uppercase">
         <option value="05/2026">MAIO/2026</option>
         <option value="06/2026">JUNHO/2026</option>
@@ -135,30 +135,47 @@
     let dadosGlobais = { compromissos: [], faturas: [], transacoes: [] };
     let mapaFaturasPorCompetencia = {};
 
-    const LISTA_MESES_PADRAO = [
-      { valor: "05/2026", texto: "MAIO/2026" },
-      { valor: "06/2026", texto: "JUNHO/2026" },
-      { valor: "07/2026", texto: "JULHO/2026" },
-      { valor: "08/2026", texto: "AGOSTO/2026" },
-      { valor: "09/2026", texto: "SETEMBRO/2026" },
-      { valor: "10/2026", texto: "OUTUBRO/2026" },
-      { valor: "11/2026", texto: "NOVEMBRO/2026" },
-      { valor: "12/2026", texto: "DEZEMBRO/2026" },
-      { valor: "01/2027", texto: "JANEIRO/2027" },
-      { valor: "02/2027", texto: "FEVEREIRO/2027" },
-      { valor: "03/2027", texto: "MARÇO/2027" },
-      { valor: "04/2027", texto: "ABRIL/2027" }
-    ];
+    const NOMES_MESES = {
+      "01": "JANEIRO", "02": "FEVEREIRO", "03": "MARÇO", "04": "ABRIL",
+      "05": "MAIO", "06": "JUNHO", "07": "JULHO", "08": "AGOSTO",
+      "09": "SETEMBRO", "10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"
+    };
 
-    function garantirSeletorMeses() {
+    function atualizarSeletorMesesDinamico() {
       const select = document.getElementById('filtro-mes');
       if (!select) return;
-      if (select.options.length === 0 || !select.value) {
-        select.innerHTML = LISTA_MESES_PADRAO.map(m =>
-          `<option value="${m.valor}" ${m.valor === '10/2026' ? 'selected' : ''}>${m.texto}</option>`
-        ).join('');
-        select.value = '10/2026';
+      const valorAtual = select.value || '10/2026';
+
+      // Começa em Maio/2026 (2026*12 + 4) e vai no mínimo até Abril/2027 ou até a última parcela futura existente
+      const minIdx = 2026 * 12 + 4; // 05/2026
+      let maxIdx = 2027 * 12 + 3;   // 04/2027
+
+      Object.keys(mapaFaturasPorCompetencia).forEach(comp => {
+        const [m, a] = comp.split('/').map(Number);
+        if (m && a) {
+          const idx = a * 12 + (m - 1);
+          if (idx > maxIdx) maxIdx = idx;
+        }
+      });
+
+      (dadosGlobais.compromissos || []).forEach(item => {
+        const matchTag = String(item[0] || '').match(/\[(\d{2})\/(\d{4})\]/);
+        if (matchTag) {
+          const idx = parseInt(matchTag[2], 10) * 12 + (parseInt(matchTag[1], 10) - 1);
+          if (idx > maxIdx) maxIdx = idx;
+        }
+      });
+
+      let htmlOptions = '';
+      for (let idx = minIdx; idx <= maxIdx; idx++) {
+        const ano = Math.floor(idx / 12);
+        const mes = String((idx % 12) + 1).padStart(2, '0');
+        const comp = `${mes}/${ano}`;
+        const label = `${NOMES_MESES[mes]}/${ano}`;
+        htmlOptions += `<option value="${comp}" ${comp === valorAtual ? 'selected' : ''}>${label}</option>`;
       }
+      select.innerHTML = htmlOptions;
+      select.value = valorAtual;
     }
 
     function parseNum(v) {
@@ -219,6 +236,16 @@
       return `MÉTODO: ${metodo} • ID: ${String(idTransacao).substring(0, 8).toUpperCase()}`;
     }
 
+    function compromissoPertenceAoMes(nomeCompromisso, mesSelecionado) {
+      const matchTag = String(nomeCompromisso || '').match(/\[(\d{2}\/\d{4})\]/);
+      if (!matchTag) return true; // Conta fixa recorrente mensal
+      return matchTag[1] === mesSelecionado; // Parcela manual específica daquele mês
+    }
+
+    function limparNomeCompromisso(nomeCompromisso) {
+      return String(nomeCompromisso || '').replace(/\s*\[\d{2}\/\d{4}\]/g, '').trim();
+    }
+
     function construirFaturasDaPlanilha() {
       mapaFaturasPorCompetencia = {};
 
@@ -238,7 +265,6 @@
 
       const txs = dadosGlobais.transacoes || [];
 
-      // Detecta se as parcelas >= 2 até Outubro/2026 caíram no dia 07 (fuso UTC-4) ou no dia 08 (BRT)
       let qtdDia07 = 0;
       let qtdDia08 = 0;
       txs.forEach(tx => {
@@ -263,6 +289,7 @@
       const deslocamentoDias = (qtdDia07 > qtdDia08) ? 1 : 0;
 
       const itensPorComp = {};
+      const seriesParceladas = {};
 
       txs.forEach(tx => {
         const conta = String(tx[1] || '').toLowerCase();
@@ -295,7 +322,7 @@
         const ehEstorno = (direcao === 'CREDIT' || valorBruto < 0);
         const valorAssinado = ehEstorno ? -valorAbs : valorAbs;
 
-        // Janela oficial Nubank: 08/Mês_Anterior até 07/Mês_Vencimento
+        // Corte Oficial do Nubank: dia >= 8 cai na fatura do mês seguinte
         let mesFat = dia >= 8 ? mes + 1 : mes;
         let anoFat = ano;
         if (mesFat > 12) {
@@ -303,9 +330,11 @@
           anoFat++;
         }
         const comp = `${String(mesFat).padStart(2, '0')}/${anoFat}`;
+        const compIdx = anoFat * 12 + (mesFat - 1);
 
         const parcelaCol = String(tx[8] || '').trim();
-        const rotuloParcela = ehEstorno ? 'ESTORNO / CRÉDITO' : (parcelaCol ? `PARCELA ${parcelaCol}` : 'À VISTA');
+        const matchParc = !ehEstorno && (parcelaCol.match(/^(\d{1,2})\/(\d{1,2})$/) || desc.match(/\b(\d{1,2})\/(\d{1,2})\b/));
+        const rotuloParcela = ehEstorno ? 'ESTORNO / CRÉDITO' : (matchParc ? `PARCELA ${matchParc[1]}/${matchParc[2]}` : 'À VISTA');
 
         if (!itensPorComp[comp]) itensPorComp[comp] = [];
         itensPorComp[comp].push({
@@ -315,6 +344,52 @@
           valor: Number(valorAssinado.toFixed(2)),
           ehEstorno: ehEstorno
         });
+
+        // Guarda a maior parcela já lançada pela Pluggy para cada compra parcelada
+        if (matchParc) {
+          const numP = parseInt(matchParc[1], 10);
+          const totP = parseInt(matchParc[2], 10);
+          const descLimpa = desc.replace(/\b(?:parcela\s*)?\d{1,2}\/\d{1,2}\b/gi, '').replace(/-\s*$/, '').trim();
+          const chaveSerie = `${descLimpa.toLowerCase()}_${totP}`;
+          if (!seriesParceladas[chaveSerie] || numP > seriesParceladas[chaveSerie].maxNumP) {
+            seriesParceladas[chaveSerie] = {
+              descBase: descLimpa.toUpperCase(),
+              maxNumP: numP,
+              totP: totP,
+              maxCompIdx: compIdx,
+              diaRef: dia,
+              valor: Number(valorAssinado.toFixed(2))
+            };
+          }
+        }
+      });
+
+      // Se você fizer uma compra parcelada nova (ex: 10x) e no 1º dia a Pluggy tiver enviado apenas a parcela 1/10,
+      // projeta automaticamente da 2/10 até a 10/10 nos meses seguintes sem duplicar o que a Pluggy já enviou
+      Object.keys(seriesParceladas).forEach(k => {
+        const s = seriesParceladas[k];
+        if (s.maxNumP < s.totP && s.maxCompIdx >= (2026 * 12 + 10)) {
+          for (let p = s.maxNumP + 1; p <= s.totP; p++) {
+            const idxFuturo = s.maxCompIdx + (p - s.maxNumP);
+            const anoF = Math.floor(idxFuturo / 12);
+            const mesF = (idxFuturo % 12) + 1;
+            const compF = `${String(mesF).padStart(2, '0')}/${anoF}`;
+
+            let mesData = s.diaRef >= 8 ? mesF - 1 : mesF;
+            let anoData = anoF;
+            if (mesData < 1) { mesData = 12; anoData--; }
+            const dataProj = `${String(Math.min(s.diaRef, 28)).padStart(2, '0')}/${String(mesData).padStart(2, '0')}/${anoData}`;
+
+            if (!itensPorComp[compF]) itensPorComp[compF] = [];
+            itensPorComp[compF].push({
+              data: dataProj,
+              descricao: `${s.descBase} ${p}/${s.totP}`,
+              parcela: `PARCELA ${p}/${s.totP}`,
+              valor: s.valor,
+              ehEstorno: false
+            });
+          }
+        }
       });
 
       Object.keys(itensPorComp).forEach(comp => {
@@ -336,13 +411,14 @@
           itens: lista
         };
       });
+
+      atualizarSeletorMesesDinamico();
     }
 
     function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
     function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
 
     function abrirDetalhes(tipo) {
-      garantirSeletorMeses();
       const modal = document.getElementById('modal-detalhes');
       const titulo = document.getElementById('modal-titulo');
       const lista = document.getElementById('modal-lista-detalhes');
@@ -354,52 +430,56 @@
 
       if (tipo === 'entradas') {
         titulo.innerText = "DETALHES - ENTRADAS PREVISTAS & RECEBIDAS";
-        (dadosGlobais.compromissos || []).filter(i => String(i[1]).toUpperCase() === 'ENTRADA').forEach(item => {
-          let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
-          let isReal = ehOutubro2026 && String(status).toUpperCase().includes('RECEBIDO');
-          let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-          let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
-          let dataStr = isReal && dataBaixa
-            ? `RECEBIDO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`
-            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`;
-          let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
-          let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
+        (dadosGlobais.compromissos || [])
+          .filter(i => String(i[1]).toUpperCase() === 'ENTRADA' && compromissoPertenceAoMes(i[0], mesSelecionado))
+          .forEach(item => {
+            let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
+            let isReal = ehOutubro2026 && String(status).toUpperCase().includes('RECEBIDO');
+            let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
+            let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
+            let dataStr = isReal && dataBaixa
+              ? `RECEBIDO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`
+              : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`;
+            let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
+            let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
 
-          lista.innerHTML += `
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
-              <div class="pr-2">
-                <p class="text-sm font-semibold text-white uppercase">${compromisso}</p>
-                <span class="text-[10px] text-emerald-400 block uppercase mt-0.5">${dataStr}</span>
-                <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
+            lista.innerHTML += `
+              <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
+                <div class="pr-2">
+                  <p class="text-sm font-semibold text-white uppercase">${limparNomeCompromisso(compromisso)}</p>
+                  <span class="text-[10px] text-emerald-400 block uppercase mt-0.5">${dataStr}</span>
+                  <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
+                </div>
+                <span class="font-bold text-emerald-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
               </div>
-              <span class="font-bold text-emerald-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
-            </div>
-          `;
-        });
+            `;
+          });
       } else {
         titulo.innerText = "DETALHES - DESPESAS DO MÊS";
-        (dadosGlobais.compromissos || []).filter(i => String(i[1]).toUpperCase() === 'SAIDA').forEach(item => {
-          let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
-          let isReal = ehOutubro2026 && String(status).toUpperCase().includes('PAGO');
-          let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-          let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
-          let dataStr = isReal && dataBaixa
-            ? `PAGO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • FAV.: ${String(regra || compromisso).toUpperCase()}`
-            : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • FAV.: ${String(regra || compromisso).toUpperCase()}`;
-          let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
-          let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
+        (dadosGlobais.compromissos || [])
+          .filter(i => String(i[1]).toUpperCase() === 'SAIDA' && compromissoPertenceAoMes(i[0], mesSelecionado))
+          .forEach(item => {
+            let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
+            let isReal = ehOutubro2026 && String(status).toUpperCase().includes('PAGO');
+            let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
+            let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
+            let dataStr = isReal && dataBaixa
+              ? `PAGO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • FAV.: ${String(regra || compromisso).toUpperCase()}`
+              : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • FAV.: ${String(regra || compromisso).toUpperCase()}`;
+            let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
+            let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
 
-          lista.innerHTML += `
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
-              <div class="pr-2">
-                <p class="text-sm font-semibold text-white uppercase">${compromisso}</p>
-                <span class="text-[10px] text-rose-400 block uppercase mt-0.5">${dataStr}</span>
-                <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
+            lista.innerHTML += `
+              <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
+                <div class="pr-2">
+                  <p class="text-sm font-semibold text-white uppercase">${limparNomeCompromisso(compromisso)}</p>
+                  <span class="text-[10px] text-rose-400 block uppercase mt-0.5">${dataStr}</span>
+                  <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
+                </div>
+                <span class="font-bold text-rose-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
               </div>
-              <span class="font-bold text-rose-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
-            </div>
-          `;
-        });
+            `;
+          });
       }
       modal.classList.remove('hidden');
       modal.classList.add('flex');
@@ -411,7 +491,6 @@
     }
 
     async function carregarDados() {
-      garantirSeletorMeses();
       try {
         const resposta = await fetch(URL_DO_WEB_APP, { redirect: 'follow' });
         const texto = await resposta.text();
@@ -441,15 +520,9 @@
     }
 
     function renderizarDados() {
-      garantirSeletorMeses();
       const mesSelecionado = document.getElementById('filtro-mes').value || '10/2026';
       const [mesNum, anoNum] = mesSelecionado.split('/');
-      const nomesMeses = {
-        "05": "MAIO", "06": "JUNHO", "07": "JULHO", "08": "AGOSTO",
-        "09": "SETEMBRO", "10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO",
-        "01": "JANEIRO", "02": "FEVEREIRO", "03": "MARÇO", "04": "ABRIL"
-      };
-      document.getElementById('titulo-mes').innerText = `${nomesMeses[mesNum] || "OUTUBRO"} ${anoNum || "2026"}`;
+      document.getElementById('titulo-mes').innerText = `${NOMES_MESES[mesNum] || "OUTUBRO"} ${anoNum || "2026"}`;
 
       let mesAnt = Number(mesNum) === 1 ? 12 : Number(mesNum) - 1;
       let anoAnt = Number(mesNum) === 1 ? Number(anoNum) - 1 : Number(anoNum);
@@ -466,6 +539,8 @@
 
       (dadosGlobais.compromissos || []).forEach(item => {
         let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
+        if (!compromissoPertenceAoMes(compromisso, mesSelecionado)) return;
+
         let isRealizado = ehOutubro2026 && (String(status).includes('PAGO') || String(status).includes('RECEBIDO'));
         let valorExibido = (isRealizado && valorReal !== "" && !isNaN(parseNum(valorReal))) ? parseNum(valorReal) : parseNum(valorPrevisto);
         
@@ -549,7 +624,8 @@
         tipo: document.getElementById('novo-tipo').value,
         valor: document.getElementById('novo-valor').value,
         dia: document.getElementById('novo-dia').value,
-        parcelas: document.getElementById('novo-parcelas').value
+        parcelas: document.getElementById('novo-parcelas').value,
+        competenciaInicial: document.getElementById('filtro-mes').value || '10/2026'
       };
 
       try {
