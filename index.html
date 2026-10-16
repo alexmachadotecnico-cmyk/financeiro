@@ -1,648 +1,780 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meu Controle Financeiro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#09090b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Finanças · Alex Machado</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #09090b;
+      color: #f4f4f5;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bento-card {
+      background-color: #121215;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .sub-card {
+      background-color: #16161a;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    select.cat-pill {
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: none;
+    }
+    ::-webkit-scrollbar { width: 0px; background: transparent; }
+  </style>
 </head>
-<body class="bg-[#0f172a] text-slate-100 font-sans pb-12">
+<body class="min-h-screen pb-28 antialiased selection:bg-emerald-500/20">
 
-  <!-- Header Estilo Cartão Verde -->
-  <header class="bg-[#14532d] shadow-md p-4 sticky top-0 z-50">
-    <div class="max-w-md mx-auto flex justify-between items-center">
+  <!-- Cabeçalho Minimalista -->
+  <header class="sticky top-0 z-40 bg-[#09090b]/85 backdrop-blur-xl border-b border-white/[0.06] px-4 py-3.5">
+    <div class="max-w-md mx-auto flex justify-between items-start">
       <div>
-        <span class="text-[11px] uppercase tracking-wider text-emerald-200 block font-medium">MEU FINANCEIRO</span>
-        <h1 id="titulo-mes" class="text-xl font-bold text-white uppercase">OUTUBRO 2026</h1>
+        <h1 class="text-xl font-bold tracking-tight text-white">Finanças</h1>
+        <div class="flex items-center gap-2 mt-0.5">
+          <span class="text-[11px] text-zinc-400">Alex Machado • Sincronizado via Open Finance</span>
+          <button onclick="forcarSyncPluggy()" id="btn-sync" class="text-[11px] text-zinc-300 hover:text-white underline decoration-zinc-600 underline-offset-2 transition">
+            Atualizar
+          </button>
+        </div>
       </div>
-      <!-- Seletor de Mês (Expande automaticamente conforme novas parcelas) -->
-      <select id="filtro-mes" onchange="renderizarDados()" class="bg-[#166534] text-xs text-white px-3 py-2 rounded-xl border border-emerald-600 focus:outline-none font-medium uppercase">
-        <option value="05/2026">MAIO/2026</option>
-        <option value="06/2026">JUNHO/2026</option>
-        <option value="07/2026">JULHO/2026</option>
-        <option value="08/2026">AGOSTO/2026</option>
-        <option value="09/2026">SETEMBRO/2026</option>
-        <option value="10/2026" selected>OUTUBRO/2026</option>
-        <option value="11/2026">NOVEMBRO/2026</option>
-        <option value="12/2026">DEZEMBRO/2026</option>
-        <option value="01/2027">JANEIRO/2027</option>
-        <option value="02/2027">FEVEREIRO/2027</option>
-        <option value="03/2027">MARÇO/2027</option>
-        <option value="04/2027">ABRIL/2027</option>
+      <select id="filtro-mes" onchange="renderizarInterface()" class="bg-[#16161a] text-xs text-zinc-200 px-3 py-1.5 rounded-lg border border-white/10 focus:outline-none font-medium">
+        <option value="08/2026">Agosto 2026</option>
+        <option value="09/2026">Setembro 2026</option>
+        <option value="10/2026" selected>Outubro 2026</option>
+        <option value="11/2026">Novembro 2026</option>
+        <option value="12/2026">Dezembro 2026</option>
       </select>
     </div>
   </header>
 
-  <main class="max-w-md mx-auto p-4 space-y-4">
+  <main class="max-w-md mx-auto px-4 pt-3 space-y-3">
 
-    <!-- Cards de Resumo Clicáveis -->
-    <div class="grid grid-cols-2 gap-3">
-      <div onclick="abrirDetalhes('entradas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-emerald-500 transition">
-        <span class="text-[11px] font-semibold text-emerald-400 block uppercase">ENTRADAS PREVISTAS</span>
-        <span id="total-entradas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
-        <span id="qtd-entradas" class="text-[10px] text-slate-400">0 LANÇAMENTO(S)</span>
-      </div>
-      <div onclick="abrirDetalhes('despesas')" class="bg-[#1e293b] border border-slate-700 p-3.5 rounded-2xl shadow cursor-pointer hover:border-rose-500 transition">
-        <span class="text-[11px] font-semibold text-rose-400 block uppercase">DESPESAS</span>
-        <span id="total-saidas" class="text-lg font-bold text-white mt-1 block">R$ 0,00</span>
-        <span id="qtd-saidas" class="text-[10px] text-slate-400">0 FIXA(S) + FATURA</span>
-      </div>
-    </div>
-
-    <!-- Saldo Líquido -->
-    <div class="bg-gradient-to-r from-emerald-900/50 to-slate-800 border border-emerald-700/50 p-4 rounded-2xl shadow flex justify-between items-center">
-      <div>
-        <span class="text-xs text-emerald-300 block font-medium uppercase">SALDO LÍQUIDO PROJETADO</span>
-        <span class="text-[10px] text-slate-400 uppercase">ENTRADAS MENOS DESPESAS E FATURA</span>
-      </div>
-      <span id="saldo-liquido" class="text-lg font-bold text-emerald-400">R$ 0,00</span>
-    </div>
-
-    <!-- Fatura do Cartão do Mês Selecionado -->
-    <section class="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 shadow space-y-3">
-      <div class="flex justify-between items-center border-b border-slate-700/60 pb-2">
+    <!-- Card Principal: Falta Pagar & Sobra Prevista -->
+    <section class="bento-card rounded-2xl p-4 space-y-3">
+      <div class="flex justify-between items-start">
         <div>
-          <h2 class="text-sm font-semibold text-slate-200 uppercase">FATURA DO CARTÃO (MÊS CORRENTE)</h2>
-          <span id="subtitulo-ciclo" class="text-[10px] text-slate-400 uppercase block">CICLO DE CORTE DIA 08 A DIA 07</span>
+          <span class="text-xs text-zinc-400 block">Falta pagar no mês</span>
+          <span id="card-falta-pagar" class="text-2xl font-bold tracking-tight text-white mt-0.5 block">R$ 0,00</span>
         </div>
-        <span id="total-faturas" class="text-xs font-bold text-rose-400">R$ 0,00</span>
+        <div class="text-right">
+          <span class="text-xs text-zinc-400 block">Sobra prevista</span>
+          <span id="card-sobra-prevista" class="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 inline-block mt-1">
+            +R$ 0,00
+          </span>
+        </div>
       </div>
-      <div id="lista-faturas" class="space-y-3">
-        <div class="text-xs text-slate-400 text-center py-2 uppercase">A SINCRONIZAR COM A PLANILHA...</div>
+
+      <div class="space-y-1.5">
+        <div class="w-full h-2 bg-zinc-800/90 rounded-full overflow-hidden">
+          <div id="barra-geral-pago" class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 5%"></div>
+        </div>
+        <p id="texto-pago-total" class="text-[11px] text-zinc-400">
+          Já pago: R$ 0,00 • Total: R$ 0,00
+        </p>
       </div>
     </section>
 
-    <!-- Botão Adicionar Lançamento -->
-    <div class="text-center pt-2">
-      <button onclick="abrirModal()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-3 rounded-xl transition shadow uppercase tracking-wider">+ ADICIONAR NOVO LANÇAMENTO</button>
-    </div>
+    <!-- Sub-cards: Saldo Conta Nubank & Falta Receber -->
+    <section class="grid grid-cols-2 gap-2.5">
+      <div class="sub-card rounded-2xl p-3.5">
+        <span class="text-xs text-zinc-400 block">Saldo Conta Nubank</span>
+        <span id="card-saldo-nubank" class="text-base font-bold text-white mt-1 block">R$ 107,68</span>
+        <span id="card-limite-nubank" class="text-[11px] text-zinc-500 mt-0.5 block">Limite disp.: R$ 205,25</span>
+      </div>
+      <div class="sub-card rounded-2xl p-3.5">
+        <span class="text-xs text-zinc-400 block">Falta receber no mês</span>
+        <span id="card-falta-receber" class="text-base font-bold text-white mt-1 block">R$ 671,50</span>
+        <span id="card-ja-entrou" class="text-[11px] text-zinc-400 mt-0.5 block">(Já entrou: R$ 2.520,00)</span>
+      </div>
+    </section>
+
+    <!-- Navegação de Abas Minimalista (Sem Ícones) -->
+    <nav class="sub-card p-1 rounded-xl grid grid-cols-4 gap-1 text-[11px] font-medium">
+      <button onclick="selecionarAba('categorias')" id="aba-btn-categorias" class="py-1.5 rounded-lg bg-zinc-800 text-white border border-white/10 transition">
+        Categorias
+      </button>
+      <button onclick="selecionarAba('cartao')" id="aba-btn-cartao" class="py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition">
+        Extrato Nubank
+      </button>
+      <button onclick="selecionarAba('banco')" id="aba-btn-banco" class="py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition">
+        Extrato Banco
+      </button>
+      <button onclick="selecionarAba('dinheiro')" id="aba-btn-dinheiro" class="py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition">
+        Dinheiro
+      </button>
+    </nav>
+
+    <!-- SEÇÃO 1: LIMITES POR CATEGORIA (BARRAS HORIZONTAIS) -->
+    <section id="secao-categorias" class="bento-card rounded-2xl p-4 space-y-3.5">
+      <div class="flex justify-between items-center">
+        <h2 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Limites por Categoria</h2>
+        <span id="resumo-orcamento-cat" class="text-[11px] text-zinc-500"></span>
+      </div>
+      <div id="lista-barras-categorias" class="space-y-3.5"></div>
+    </section>
+
+    <!-- SEÇÃO 2: LANÇAMENTOS DO MÊS (EXTRATO COM TROCA DE CATEGORIA) -->
+    <section class="bento-card rounded-2xl p-4 space-y-3">
+      <div class="flex justify-between items-center border-b border-white/[0.06] pb-2">
+        <h2 id="titulo-lista-extrato" class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+          Lançamentos do Mês (Cartão & Fixas)
+        </h2>
+        <span id="subtitulo-lista-extrato" class="text-[11px] text-zinc-500">Toque na categoria para alterar</span>
+      </div>
+      <div id="lista-lancamentos-mes" class="divide-y divide-white/[0.05]"></div>
+    </section>
 
   </main>
 
-  <!-- Modal Detalhes (Entradas Previstas / Despesas) -->
-  <div id="modal-detalhes" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-4 z-50">
-    <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[80vh] flex flex-col">
-      <div class="flex justify-between items-center border-b border-slate-700 pb-2">
-        <h3 id="modal-titulo" class="font-bold text-base text-slate-200 uppercase">DETALHES</h3>
-        <button onclick="fecharDetalhes()" class="text-slate-400 hover:text-white text-lg">&times;</button>
-      </div>
-      <div id="modal-lista-detalhes" class="overflow-y-auto space-y-2.5 pr-1"></div>
+  <!-- Barra Flutuante Inferior: Novo Lançamento & Criar Categorias/Limites -->
+  <div class="fixed bottom-0 inset-x-0 z-40 bg-[#09090b]/90 backdrop-blur-xl border-t border-white/[0.08] p-3">
+    <div class="max-w-md mx-auto grid grid-cols-2 gap-2.5">
+      <button onclick="abrirModalLancamento()" class="bg-[#18181c] hover:bg-zinc-800 text-zinc-100 text-xs font-medium py-2.5 px-3 rounded-xl border border-white/10 transition">
+        + Novo Lançamento (Dinheiro)
+      </button>
+      <button onclick="abrirModalCategorias()" class="bg-[#18181c] hover:bg-zinc-800 text-zinc-100 text-xs font-medium py-2.5 px-3 rounded-xl border border-white/10 transition">
+        Criar Categorias & Limites
+      </button>
     </div>
   </div>
 
-  <!-- Modal Cadastro -->
-  <div id="modal-cadastro" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
-    <div class="bg-[#1e293b] border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
-      <div class="flex justify-between items-center">
-        <h3 class="font-bold text-base text-slate-200 uppercase">ADICIONAR DESPESA / RECEITA</h3>
-        <button onclick="fecharModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+  <!-- MODAL 1: NOVO LANÇAMENTO (DINHEIRO OU CONTA FIXA) -->
+  <div id="modal-lancamento" class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
+    <div class="bento-card w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-white/[0.07] pb-2.5">
+        <h3 class="text-sm font-semibold text-white">Novo Lançamento</h3>
+        <button onclick="fecharModalLancamento()" class="text-zinc-400 hover:text-white text-sm px-2">Fechar</button>
       </div>
-      <form id="form-novo" onsubmit="salvarCompromisso(event)" class="space-y-3">
-        <div>
-          <label class="text-xs text-slate-400 block mb-1 uppercase">COMPROMISSO / DESCRIÇÃO</label>
-          <input type="text" id="novo-nome" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
-        </div>
+      <form id="form-lancamento" onsubmit="salvarNovoLancamento(event)" class="space-y-3">
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-xs text-slate-400 block mb-1 uppercase">TIPO</label>
-            <select id="novo-tipo" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
-              <option value="SAIDA">SAÍDA</option>
-              <option value="ENTRADA">ENTRADA</option>
+            <label class="text-[11px] text-zinc-400 block mb-1">Onde lançar?</label>
+            <select id="lanc-modalidade" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white">
+              <option value="DINHEIRO">Gasto / Entrada em Dinheiro</option>
+              <option value="FIXO">Compromisso Fixo / Parcelado</option>
             </select>
           </div>
           <div>
-            <label class="text-xs text-slate-400 block mb-1 uppercase">VALOR TOTAL (R$)</label>
-            <input type="number" step="0.01" id="novo-valor" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
+            <label class="text-[11px] text-zinc-400 block mb-1">Tipo</label>
+            <select id="lanc-tipo" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white">
+              <option value="SAIDA">Saída (Despesa)</option>
+              <option value="ENTRADA">Entrada (Receita)</option>
+            </select>
           </div>
         </div>
+
+        <div>
+          <label class="text-[11px] text-zinc-400 block mb-1">Descrição</label>
+          <input type="text" id="lanc-nome" required placeholder="Ex: Almoço, Farmácia, Feira..." class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none">
+        </div>
+
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-xs text-slate-400 block mb-1 uppercase">DIA DO VENCIMENTO</label>
-            <input type="number" id="novo-dia" min="1" max="31" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
+            <label class="text-[11px] text-zinc-400 block mb-1">Valor (R$)</label>
+            <input type="number" step="0.01" id="lanc-valor" required placeholder="0,00" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none">
           </div>
           <div>
-            <label class="text-xs text-slate-400 block mb-1 uppercase">QTD PARCELAS</label>
-            <input type="number" id="novo-parcelas" min="1" max="48" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
+            <label class="text-[11px] text-zinc-400 block mb-1">Categoria (Automática se vazio)</label>
+            <select id="lanc-categoria" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white"></select>
           </div>
         </div>
-        <button type="submit" id="btn-salvar" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition text-sm shadow uppercase">SALVAR COMPROMISSO</button>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-zinc-400 block mb-1">Dia</label>
+            <input type="number" id="lanc-dia" min="1" max="31" value="16" required class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white">
+          </div>
+          <div>
+            <label class="text-[11px] text-zinc-400 block mb-1">Parcelas (para Fixo)</label>
+            <input type="number" id="lanc-parcelas" min="1" max="48" value="1" required class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white">
+          </div>
+        </div>
+
+        <button type="submit" id="btn-salvar-lanc" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-2.5 rounded-xl text-xs transition">
+          Salvar Lançamento
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CRIAR / EDITAR CATEGORIAS & LIMITES -->
+  <div id="modal-categorias" class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden justify-center items-end sm:items-center p-4 z-50">
+    <div class="bento-card w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-white/[0.07] pb-2.5">
+        <h3 class="text-sm font-semibold text-white">Criar ou Editar Categoria & Limite</h3>
+        <button onclick="fecharModalCategorias()" class="text-zinc-400 hover:text-white text-sm px-2">Fechar</button>
+      </div>
+
+      <form id="form-categoria" onsubmit="salvarCategoriaLimite(event)" class="space-y-3">
+        <div>
+          <label class="text-[11px] text-zinc-400 block mb-1">Nome da Categoria (selecione abaixo ou digite uma nova)</label>
+          <input type="text" id="cat-nome" list="datalist-categorias" required placeholder="Ex: Saúde & Bem-Estar" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none">
+          <datalist id="datalist-categorias"></datalist>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-zinc-400 block mb-1">Limite Mensal (R$)</label>
+            <input type="number" step="0.01" id="cat-limite" required placeholder="1000.00" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none">
+          </div>
+          <div>
+            <label class="text-[11px] text-zinc-400 block mb-1">Cor da Barra</label>
+            <select id="cat-cor" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white">
+              <option value="#38bdf8">Azul Claro</option>
+              <option value="#c084fc">Roxo Suave</option>
+              <option value="#60a5fa">Azul Royal</option>
+              <option value="#fbbf24">Âmbar / Dourado</option>
+              <option value="#34d399">Verde Esmeralda</option>
+              <option value="#f472b6">Rosa Suave</option>
+              <option value="#a1a1aa">Cinza Neutro</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] text-zinc-400 block mb-1">Palavras-chave para puxar automaticamente (separadas por vírgula)</label>
+          <input type="text" id="cat-kws" placeholder="Ex: drogaria, farmacia, pilates, terapia" class="w-full bg-[#18181c] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none">
+        </div>
+
+        <button type="submit" id="btn-salvar-cat" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-2.5 rounded-xl text-xs transition">
+          Salvar Categoria & Limite
+        </button>
       </form>
     </div>
   </div>
 
   <script>
     const URL_DO_WEB_APP = "https://script.google.com/macros/s/AKfycbzNdp_jDA9za0m-jg_N1-IOjzZKDnSKnm22427gleTSKJLtXKPU1_mHYsU0emJKVTn_UQ/exec";
-    let dadosGlobais = { compromissos: [], faturas: [], transacoes: [] };
-    let mapaFaturasPorCompetencia = {};
 
-    const NOMES_MESES = {
-      "01": "JANEIRO", "02": "FEVEREIRO", "03": "MARÇO", "04": "ABRIL",
-      "05": "MAIO", "06": "JUNHO", "07": "JULHO", "08": "AGOSTO",
-      "09": "SETEMBRO", "10": "OUTUBRO", "11": "NOVEMBRO", "12": "DEZEMBRO"
+    let abaAtual = 'categorias';
+    let mapaFaturasNubank = {};
+
+    // Estado inicial com os dados auditados de Outubro/2026 para renderização instantânea (0ms)
+    let dados = {
+      contas: [
+        ["Nu Pagamentos S.A.", "Conta Corrente", "Conta Corrente", "04804781-6", "Alex", 107.68, "", "", "", ""],
+        ["Nu Pagamentos S.A.", "Cartão gold", "Cartão de Crédito", "8240", "Alex", 1882.75, "", "", 205.25, 2088.00]
+      ],
+      categoriasLimites: [
+        ["Saúde & Bem-Estar", 1000.00, "#38bdf8", "pilates, nattalia, terapia, michelle, drogaria, rosario, farmacia"],
+        ["Cartões de Crédito", 1800.00, "#c084fc", "nubank, havan, riachuelo, midway, fatura"],
+        ["Consórcio & Bancos", 500.00, "#60a5fa", "klubi, consorcio, santander, boleto"],
+        ["Dinheiro / Diversos", 300.00, "#fbbf24", "tim, shalom, dinheiro, diversos, almoco"],
+        ["Compras & Educação", 400.00, "#f472b6", "mercadolivre, livraria, vozes, amazon"],
+        ["Alimentação & Mercado", 600.00, "#34d399", "ifood, panificadora, supermercado, almoco"]
+      ],
+      compromissos: [
+        ["Pilates (Nattalia)", "SAIDA", 320.00, 10, "Nattalia Renata", "PAGO (Parcial)", 50.00, "09/10/2026", "93f974e9", "Saúde & Bem-Estar"],
+        ["Terapia (Michelle)", "SAIDA", 550.00, 17, "Michelle dos santos Branquinho", "PENDENTE", "", "", "", "Saúde & Bem-Estar"],
+        ["TIM", "SAIDA", 71.52, 28, "TIM", "PENDENTE", "", "", "", "Dinheiro / Diversos"],
+        ["Fatura Havan", "SAIDA", 119.19, 20, "Havan", "PENDENTE", "", "", "", "Cartões de Crédito"],
+        ["Fatura Riachuelo (Midway)", "SAIDA", 124.45, 20, "Midway", "PENDENTE", "", "", "", "Cartões de Crédito"],
+        ["Consórcio Klubi", "SAIDA", 253.94, 10, "Klubi", "PENDENTE", "", "", "", "Consórcio & Bancos"],
+        ["Santander (Boleto)", "SAIDA", 85.30, 5, "Santander", "PAGO", 85.30, "07/10/2026", "4a4f3dd3", "Consórcio & Bancos"],
+        ["Shalom", "SAIDA", 53.90, 21, "Shalom", "PENDENTE", "", "", "", "Dinheiro / Diversos"],
+        ["Entrada Fixa Mensal (Padre Clemente)", "ENTRADA", 500.00, 2, "Klemens Deja", "RECEBIDO", 500.00, "07/10/2026", "889d681b", "Entradas"],
+        ["Apoio Familiar", "ENTRADA", 1500.00, 10, "Ari Machado", "RECEBIDO", 1500.00, "05/10/2026", "8d8b0ac7", "Entradas"],
+        ["Entrada Fixa Hiper", "ENTRADA", 321.50, 15, "Amanda Baby", "RECEBIDO (Parcial)", 200.00, "08/10/2026", "6bca8040", "Entradas"],
+        ["Ajuda para Pilates", "ENTRADA", 320.00, 10, "M. Machado Panificadora", "RECEBIDO", 320.00, "09/10/2026", "f2c8d9e7", "Entradas"],
+        ["Ajuda para Terapia", "ENTRADA", 550.00, 17, "Maria da Piedade", "PENDENTE", "", "", "", "Entradas"]
+      ],
+      faturas: [
+        ["gold", "14/10/2026", 1166.11, 174.92, "CLOSED", "bill_10"],
+        ["gold", "14/09/2026", 1449.18, 217.38, "CLOSED", "bill_09"]
+      ],
+      transacoes: [
+        ["02/10/2026", "gold", "Cartão de Crédito", "Drogaria Rosario 1/2", "Drogaria Rosario", "Saúde & Bem-Estar", "DEBIT", 129.76, "1/2", "", "", "", "POSTED", "tx_1"],
+        ["25/09/2026", "gold", "Cartão de Crédito", "Mercadolivre 2/6", "Mercadolivre", "Compras & Educação", "DEBIT", 48.98, "2/6", "", "", "", "POSTED", "tx_2"],
+        ["18/09/2026", "gold", "Cartão de Crédito", "Drogaria Rosario 1/3", "Drogaria Rosario", "Saúde & Bem-Estar", "DEBIT", 118.46, "1/3", "", "", "", "POSTED", "tx_3"],
+        ["12/09/2026", "gold", "Cartão de Crédito", "Livraria Vozes 1/3", "Livraria Vozes", "Compras & Educação", "DEBIT", 31.22, "1/3", "", "", "", "POSTED", "tx_4"],
+        ["09/10/2026", "Conta Corrente", "Conta Corrente", "Pix enviado - Nattalia Renata", "", "Saúde & Bem-Estar", "DEBIT", 50.00, "", "PIX", "Alex", "Nattalia Renata", "POSTED", "93f974e9"],
+        ["07/10/2026", "Conta Corrente", "Conta Corrente", "Pagamento de boleto - Santander", "", "Consórcio & Bancos", "DEBIT", 85.30, "", "BOLETO", "Alex", "Santander", "POSTED", "4a4f3dd3"],
+        ["05/10/2026", "Conta Corrente", "Conta Corrente", "Pix recebido - Ari Machado", "", "Entradas", "CREDIT", 1500.00, "", "PIX", "Ari Machado", "Alex", "POSTED", "8d8b0ac7"]
+      ],
+      dinheiro: [
+        ["03/10/2026", "Dinheiro: Almoço", "Alimentação & Mercado", "SAIDA", 35.00, "10/2026", "din_1"]
+      ]
     };
 
-    function atualizarSeletorMesesDinamico() {
-      const select = document.getElementById('filtro-mes');
-      if (!select) return;
-      const valorAtual = select.value || '10/2026';
-
-      // Começa em Maio/2026 (2026*12 + 4) e vai no mínimo até Abril/2027 ou até a última parcela futura existente
-      const minIdx = 2026 * 12 + 4; // 05/2026
-      let maxIdx = 2027 * 12 + 3;   // 04/2027
-
-      Object.keys(mapaFaturasPorCompetencia).forEach(comp => {
-        const [m, a] = comp.split('/').map(Number);
-        if (m && a) {
-          const idx = a * 12 + (m - 1);
-          if (idx > maxIdx) maxIdx = idx;
-        }
-      });
-
-      (dadosGlobais.compromissos || []).forEach(item => {
-        const matchTag = String(item[0] || '').match(/\[(\d{2})\/(\d{4})\]/);
-        if (matchTag) {
-          const idx = parseInt(matchTag[2], 10) * 12 + (parseInt(matchTag[1], 10) - 1);
-          if (idx > maxIdx) maxIdx = idx;
-        }
-      });
-
-      let htmlOptions = '';
-      for (let idx = minIdx; idx <= maxIdx; idx++) {
-        const ano = Math.floor(idx / 12);
-        const mes = String((idx % 12) + 1).padStart(2, '0');
-        const comp = `${mes}/${ano}`;
-        const label = `${NOMES_MESES[mes]}/${ano}`;
-        htmlOptions += `<option value="${comp}" ${comp === valorAtual ? 'selected' : ''}>${label}</option>`;
-      }
-      select.innerHTML = htmlOptions;
-      select.value = valorAtual;
-    }
-
-    function parseNum(v) {
+    function num(v) {
       if (typeof v === 'number') return v;
       if (!v) return 0;
       let s = String(v).trim();
-      if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+      if (s.includes('.') && s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
       else if (s.includes(',')) s = s.replace(',', '.');
       return parseFloat(s) || 0;
     }
 
-    function formatarMoeda(v) {
+    function moeda(v) {
       return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    function formatarDataBr(val) {
+    function dataBr(val) {
       if (!val) return '';
       let s = String(val).trim();
       if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-        let p = s.split('/');
+        const p = s.split('/');
         return `${p[0].padStart(2, '0')}/${p[1].padStart(2, '0')}/${p[2]}`;
       }
       if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-        let p = s.substring(0, 10).split('-');
+        const p = s.substring(0, 10).split('-');
         return `${p[2]}/${p[1]}/${p[0]}`;
       }
-      let d = new Date(s);
+      const d = new Date(s);
       if (!isNaN(d.getTime())) {
-        let dia = String(d.getUTCDate()).padStart(2, '0');
-        let mes = String(d.getUTCMonth() + 1).padStart(2, '0');
-        let ano = d.getUTCFullYear();
-        return `${dia}/${mes}/${ano}`;
+        return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
       }
       return s;
     }
 
-    function somarDiasBr(dataBr, dias) {
-      if (!dias) return dataBr;
-      const p = String(dataBr).split('/');
-      if (p.length !== 3) return dataBr;
-      const d = new Date(Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10) + dias));
-      const dia = String(d.getUTCDate()).padStart(2, '0');
-      const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
-      const ano = d.getUTCFullYear();
-      return `${dia}/${mes}/${ano}`;
+    function autoCategorizarLocal(texto) {
+      const t = String(texto || '').toLowerCase();
+      for (const c of (dados.categoriasLimites || [])) {
+        const nomeCat = String(c[0] || '').trim();
+        const kws = String(c[3] || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+        for (const k of kws) {
+          if (k && t.includes(k)) return nomeCat;
+        }
+      }
+      if (t.includes('drogaria') || t.includes('pilates') || t.includes('terapia')) return 'Saúde & Bem-Estar';
+      if (t.includes('mercadolivre') || t.includes('livraria')) return 'Compras & Educação';
+      if (t.includes('havan') || t.includes('riachuelo') || t.includes('midway')) return 'Cartões de Crédito';
+      if (t.includes('klubi') || t.includes('santander')) return 'Consórcio & Bancos';
+      if (t.includes('almoco') || t.includes('ifood')) return 'Alimentação & Mercado';
+      return 'Dinheiro / Diversos';
     }
 
-    function timestampDataBr(dataBr) {
-      const p = String(dataBr).split('/');
-      return p.length === 3 ? Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10)) : 0;
-    }
-
-    function extrairInfoTransacaoReal(idTransacao) {
-      if (!idTransacao) return 'CONFIRMADO NA PLANILHA';
-      const txReal = (dadosGlobais.transacoes || []).find(t => String(t[13]).trim() === String(idTransacao).trim());
-      if (!txReal) return 'CONFIRMADO VIA OPEN FINANCE';
-      const metodo = String(txReal[9] || 'PIX').toUpperCase();
-      return `MÉTODO: ${metodo} • ID: ${String(idTransacao).substring(0, 8).toUpperCase()}`;
-    }
-
-    function compromissoPertenceAoMes(nomeCompromisso, mesSelecionado) {
-      const matchTag = String(nomeCompromisso || '').match(/\[(\d{2}\/\d{4})\]/);
-      if (!matchTag) return true; // Conta fixa recorrente mensal
-      return matchTag[1] === mesSelecionado; // Parcela manual específica daquele mês
-    }
-
-    function limparNomeCompromisso(nomeCompromisso) {
-      return String(nomeCompromisso || '').replace(/\s*\[\d{2}\/\d{4}\]/g, '').trim();
-    }
-
-    function construirFaturasDaPlanilha() {
-      mapaFaturasPorCompetencia = {};
-
-      const faturasOficiais = {};
-      (dadosGlobais.faturas || []).forEach(f => {
-        const vencBr = formatarDataBr(f[1]);
-        const p = vencBr.split('/');
+    function processarFaturasNubank() {
+      mapaFaturasNubank = {};
+      const oficiais = {};
+      (dados.faturas || []).forEach(f => {
+        const v = dataBr(f[1]);
+        const p = v.split('/');
         if (p.length === 3) {
-          const comp = `${p[1]}/${p[2]}`;
-          faturasOficiais[comp] = {
-            cartao: String(f[0] || 'GOLD').toUpperCase(),
-            vencimento: vencBr,
-            valorTotal: Number(parseNum(f[2]).toFixed(2))
-          };
+          oficiais[`${p[1]}/${p[2]}`] = Number(num(f[2]).toFixed(2));
         }
       });
 
-      const txs = dadosGlobais.transacoes || [];
-
-      let qtdDia07 = 0;
-      let qtdDia08 = 0;
-      txs.forEach(tx => {
-        const conta = String(tx[1] || '').toLowerCase();
+      const porComp = {};
+      (dados.transacoes || []).forEach(tx => {
         const origem = String(tx[2] || '').toLowerCase();
-        if (!origem.includes('crédito') && !conta.includes('gold')) return;
-        const textoParc = `${tx[3] || ''} ${tx[8] || ''}`;
-        if (/\b([2-9]|1\d)\/\d{1,2}\b/.test(textoParc)) {
-          const dBr = formatarDataBr(tx[0]);
-          const p = dBr.split('/');
-          if (p.length === 3) {
-            const dia = parseInt(p[0], 10);
-            const mes = parseInt(p[1], 10);
-            const ano = parseInt(p[2], 10);
-            if (ano === 2026 && mes <= 10) {
-              if (dia === 7) qtdDia07++;
-              if (dia === 8) qtdDia08++;
-            }
-          }
-        }
-      });
-      const deslocamentoDias = (qtdDia07 > qtdDia08) ? 1 : 0;
-
-      const itensPorComp = {};
-      const seriesParceladas = {};
-
-      txs.forEach(tx => {
         const conta = String(tx[1] || '').toLowerCase();
-        const origem = String(tx[2] || '').toLowerCase();
         if (!origem.includes('crédito') && !conta.includes('gold')) return;
 
-        const dataOriginal = formatarDataBr(tx[0]);
-        if (!dataOriginal) return;
-
-        const dataRealBr = somarDiasBr(dataOriginal, deslocamentoDias);
-        const p = dataRealBr.split('/');
+        const dBr = dataBr(tx[0]);
+        const p = dBr.split('/');
         if (p.length !== 3) return;
-
-        const dia = parseInt(p[0], 10);
-        const mes = parseInt(p[1], 10);
-        const ano = parseInt(p[2], 10);
-
-        if (ano < 2026 || (ano === 2026 && mes < 4)) return;
+        const dia = parseInt(p[0], 10), mes = parseInt(p[1], 10), ano = parseInt(p[2], 10);
 
         const desc = String(tx[3] || '').trim();
-        const descLower = desc.toLowerCase();
+        if (desc.toLowerCase().includes('pagamento recebido')) return;
 
-        if (descLower === 'pagamento recebido' || descLower.includes('pagamento de fatura')) return;
+        const dir = String(tx[6] || '').toUpperCase();
+        const valAbs = Math.abs(num(tx[7]));
+        if (valAbs === 0) return;
+        const ehEstorno = (dir === 'CREDIT' || num(tx[7]) < 0);
+        const valFinal = ehEstorno ? -valAbs : valAbs;
 
-        const direcao = String(tx[6] || '').toUpperCase();
-        const valorBruto = parseNum(tx[7]);
-        const valorAbs = Math.abs(valorBruto);
-        if (valorAbs === 0) return;
-
-        const ehEstorno = (direcao === 'CREDIT' || valorBruto < 0);
-        const valorAssinado = ehEstorno ? -valorAbs : valorAbs;
-
-        // Corte Oficial do Nubank: dia >= 8 cai na fatura do mês seguinte
         let mesFat = dia >= 8 ? mes + 1 : mes;
         let anoFat = ano;
-        if (mesFat > 12) {
-          mesFat = 1;
-          anoFat++;
-        }
+        if (mesFat > 12) { mesFat = 1; anoFat++; }
         const comp = `${String(mesFat).padStart(2, '0')}/${anoFat}`;
-        const compIdx = anoFat * 12 + (mesFat - 1);
 
-        const parcelaCol = String(tx[8] || '').trim();
-        const matchParc = !ehEstorno && (parcelaCol.match(/^(\d{1,2})\/(\d{1,2})$/) || desc.match(/\b(\d{1,2})\/(\d{1,2})\b/));
-        const rotuloParcela = ehEstorno ? 'ESTORNO / CRÉDITO' : (matchParc ? `PARCELA ${matchParc[1]}/${matchParc[2]}` : 'À VISTA');
+        const catAtual = (tx[5] && tx[5] !== 'Sem categoria') ? String(tx[5]) : autoCategorizarLocal(desc);
 
-        if (!itensPorComp[comp]) itensPorComp[comp] = [];
-        itensPorComp[comp].push({
-          data: dataRealBr,
-          descricao: desc.toUpperCase(),
-          parcela: rotuloParcela.toUpperCase(),
-          valor: Number(valorAssinado.toFixed(2)),
-          ehEstorno: ehEstorno
+        if (!porComp[comp]) porComp[comp] = [];
+        porComp[comp].push({
+          id: String(tx[13] || ''),
+          dataCurta: `${p[0]}/${p[1]}`,
+          descricao: desc,
+          categoria: catAtual,
+          valor: valFinal,
+          ehEstorno: ehEstorno,
+          origemTipo: 'TRANSACAO'
         });
-
-        // Guarda a maior parcela já lançada pela Pluggy para cada compra parcelada
-        if (matchParc) {
-          const numP = parseInt(matchParc[1], 10);
-          const totP = parseInt(matchParc[2], 10);
-          const descLimpa = desc.replace(/\b(?:parcela\s*)?\d{1,2}\/\d{1,2}\b/gi, '').replace(/-\s*$/, '').trim();
-          const chaveSerie = `${descLimpa.toLowerCase()}_${totP}`;
-          if (!seriesParceladas[chaveSerie] || numP > seriesParceladas[chaveSerie].maxNumP) {
-            seriesParceladas[chaveSerie] = {
-              descBase: descLimpa.toUpperCase(),
-              maxNumP: numP,
-              totP: totP,
-              maxCompIdx: compIdx,
-              diaRef: dia,
-              valor: Number(valorAssinado.toFixed(2))
-            };
-          }
-        }
       });
 
-      // Se você fizer uma compra parcelada nova (ex: 10x) e no 1º dia a Pluggy tiver enviado apenas a parcela 1/10,
-      // projeta automaticamente da 2/10 até a 10/10 nos meses seguintes sem duplicar o que a Pluggy já enviou
-      Object.keys(seriesParceladas).forEach(k => {
-        const s = seriesParceladas[k];
-        if (s.maxNumP < s.totP && s.maxCompIdx >= (2026 * 12 + 10)) {
-          for (let p = s.maxNumP + 1; p <= s.totP; p++) {
-            const idxFuturo = s.maxCompIdx + (p - s.maxNumP);
-            const anoF = Math.floor(idxFuturo / 12);
-            const mesF = (idxFuturo % 12) + 1;
-            const compF = `${String(mesF).padStart(2, '0')}/${anoF}`;
-
-            let mesData = s.diaRef >= 8 ? mesF - 1 : mesF;
-            let anoData = anoF;
-            if (mesData < 1) { mesData = 12; anoData--; }
-            const dataProj = `${String(Math.min(s.diaRef, 28)).padStart(2, '0')}/${String(mesData).padStart(2, '0')}/${anoData}`;
-
-            if (!itensPorComp[compF]) itensPorComp[compF] = [];
-            itensPorComp[compF].push({
-              data: dataProj,
-              descricao: `${s.descBase} ${p}/${s.totP}`,
-              parcela: `PARCELA ${p}/${s.totP}`,
-              valor: s.valor,
-              ehEstorno: false
-            });
-          }
-        }
-      });
-
-      Object.keys(itensPorComp).forEach(comp => {
-        const lista = itensPorComp[comp];
-        lista.sort((a, b) => timestampDataBr(b.data) - timestampDataBr(a.data));
-
-        const somaCalculada = Number(lista.reduce((acc, it) => acc + it.valor, 0).toFixed(2));
-        const oficial = faturasOficiais[comp];
-
-        const valorFinalFatura = (oficial && Math.abs(oficial.valorTotal - somaCalculada) <= 0.05)
-          ? oficial.valorTotal
-          : somaCalculada;
-
-        mapaFaturasPorCompetencia[comp] = {
-          cartao: oficial ? oficial.cartao : 'GOLD',
-          vencimento: oficial ? oficial.vencimento : `14/${comp}`,
-          valorTotal: valorFinalFatura,
-          somaExtrato: somaCalculada,
-          itens: lista
+      Object.keys(porComp).forEach(comp => {
+        const soma = Number(porComp[comp].reduce((a, b) => a + b.valor, 0).toFixed(2));
+        mapaFaturasNubank[comp] = {
+          valorTotal: oficiais[comp] !== undefined ? oficiais[comp] : soma,
+          itens: porComp[comp]
         };
       });
 
-      atualizarSeletorMesesDinamico();
+      // Garante valor oficial mesmo se lista estiver parcial no cache inicial
+      Object.keys(oficiais).forEach(comp => {
+        if (!mapaFaturasNubank[comp]) {
+          mapaFaturasNubank[comp] = { valorTotal: oficiais[comp], itens: [] };
+        } else {
+          mapaFaturasNubank[comp].valorTotal = oficiais[comp];
+        }
+      });
     }
 
-    function abrirModal() { document.getElementById('modal-cadastro').classList.remove('hidden'); document.getElementById('modal-cadastro').classList.add('flex'); }
-    function fecharModal() { document.getElementById('modal-cadastro').classList.add('hidden'); document.getElementById('modal-cadastro').classList.remove('flex'); }
+    function selecionarAba(aba) {
+      abaAtual = aba;
+      ['categorias', 'cartao', 'banco', 'dinheiro'].forEach(id => {
+        const btn = document.getElementById('aba-btn-' + id);
+        if (id === aba) {
+          btn.className = "py-1.5 rounded-lg bg-zinc-800 text-white border border-white/10 transition";
+        } else {
+          btn.className = "py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition";
+        }
+      });
+      renderizarInterface();
+    }
 
-    function abrirDetalhes(tipo) {
-      const modal = document.getElementById('modal-detalhes');
-      const titulo = document.getElementById('modal-titulo');
-      const lista = document.getElementById('modal-lista-detalhes');
-      lista.innerHTML = '';
+    function obterListaCategoriasNomes() {
+      const nomes = (dados.categoriasLimites || []).map(c => String(c[0]).trim()).filter(Boolean);
+      if (nomes.length === 0) {
+        return ['Saúde & Bem-Estar', 'Cartões de Crédito', 'Consórcio & Bancos', 'Dinheiro / Diversos', 'Compras & Educação', 'Alimentação & Mercado'];
+      }
+      return nomes;
+    }
 
+    function renderizarSelectCategoriaItem(idItem, origemTipo, catAtual) {
+      const todasCats = obterListaCategoriasNomes();
+      const nomeCurto = (c) => c.split('&')[0].split('/')[0].trim();
+      const opcoes = todasCats.map(c =>
+        `<option value="${c}" ${c === catAtual ? 'selected' : ''} class="bg-zinc-900 text-white">${nomeCurto(c)}</option>`
+      ).join('');
+
+      return `
+        <select onchange="alterarCategoriaItem('${origemTipo}', '${idItem.replace(/'/g, "\\'")}', this.value)"
+          class="cat-pill text-[11px] font-medium px-2.5 py-1 rounded-md bg-zinc-800/90 text-zinc-200 border border-white/10 focus:outline-none cursor-pointer">
+          ${opcoes}
+        </select>
+      `;
+    }
+
+    function renderizarInterface() {
+      processarFaturasNubank();
       const mesSelecionado = document.getElementById('filtro-mes').value || '10/2026';
-      const [mesNum, anoNum] = mesSelecionado.split('/');
       const ehOutubro2026 = (mesSelecionado === '10/2026');
 
-      if (tipo === 'entradas') {
-        titulo.innerText = "DETALHES - ENTRADAS PREVISTAS & RECEBIDAS";
-        (dadosGlobais.compromissos || [])
-          .filter(i => String(i[1]).toUpperCase() === 'ENTRADA' && compromissoPertenceAoMes(i[0], mesSelecionado))
-          .forEach(item => {
-            let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
-            let isReal = ehOutubro2026 && String(status).toUpperCase().includes('RECEBIDO');
-            let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-            let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
-            let dataStr = isReal && dataBaixa
-              ? `RECEBIDO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`
-              : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • ORIGEM: ${String(regra || compromisso).toUpperCase()}`;
-            let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
-            let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-
-            lista.innerHTML += `
-              <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
-                <div class="pr-2">
-                  <p class="text-sm font-semibold text-white uppercase">${limparNomeCompromisso(compromisso)}</p>
-                  <span class="text-[10px] text-emerald-400 block uppercase mt-0.5">${dataStr}</span>
-                  <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
-                </div>
-                <span class="font-bold text-emerald-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
-              </div>
-            `;
-          });
-      } else {
-        titulo.innerText = "DETALHES - DESPESAS DO MÊS";
-        (dadosGlobais.compromissos || [])
-          .filter(i => String(i[1]).toUpperCase() === 'SAIDA' && compromissoPertenceAoMes(i[0], mesSelecionado))
-          .forEach(item => {
-            let [compromisso, tipoItem, valorPrevisto, dia, regra, status, valorReal, dataBaixa, idTxReal] = item;
-            let isReal = ehOutubro2026 && String(status).toUpperCase().includes('PAGO');
-            let val = isReal && valorReal !== "" ? parseNum(valorReal) : parseNum(valorPrevisto);
-            let infoExtra = isReal ? extrairInfoTransacaoReal(idTxReal) : '';
-            let dataStr = isReal && dataBaixa
-              ? `PAGO EM: ${formatarDataBr(dataBaixa)} • ${infoExtra} • FAV.: ${String(regra || compromisso).toUpperCase()}`
-              : `VENCIMENTO PREVISTO: DIA ${String(dia).padStart(2, '0')}/${mesNum}/${anoNum} • FAV.: ${String(regra || compromisso).toUpperCase()}`;
-            let statusBadge = isReal ? String(status).toUpperCase() : 'PENDENTE / PREVISTO';
-            let corBadge = isReal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400';
-
-            lista.innerHTML += `
-              <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center">
-                <div class="pr-2">
-                  <p class="text-sm font-semibold text-white uppercase">${limparNomeCompromisso(compromisso)}</p>
-                  <span class="text-[10px] text-rose-400 block uppercase mt-0.5">${dataStr}</span>
-                  <span class="text-[10px] ${corBadge} px-1.5 py-0.5 rounded uppercase font-semibold inline-block mt-1">${statusBadge}</span>
-                </div>
-                <span class="font-bold text-rose-400 text-sm whitespace-nowrap">R$ ${formatarMoeda(val)}</span>
-              </div>
-            `;
-          });
-      }
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
-
-    function fecharDetalhes() {
-      document.getElementById('modal-detalhes').classList.add('hidden');
-      document.getElementById('modal-detalhes').classList.remove('flex');
-    }
-
-    async function carregarDados() {
-      try {
-        const resposta = await fetch(URL_DO_WEB_APP, { redirect: 'follow' });
-        const texto = await resposta.text();
-        dadosGlobais = JSON.parse(texto);
-        construirFaturasDaPlanilha();
-        renderizarDados();
-      } catch (e) {
-        console.error("Erro ao carregar dados:", e);
-        document.getElementById('lista-faturas').innerHTML = `
-          <div class="text-xs text-rose-400 text-center py-2 uppercase">
-            ERRO AO LER A API DO GOOGLE APPS SCRIPT. VERIFIQUE SE A IMPLANTAÇÃO ESTÁ ATIVA.
-          </div>
-        `;
-      }
-    }
-
-    function toggleFatura(id) {
-      const el = document.getElementById(id);
-      const seta = document.getElementById('seta-' + id);
-      if (el.classList.contains('hidden')) {
-        el.classList.remove('hidden');
-        seta.style.transform = 'rotate(180deg)';
-      } else {
-        el.classList.add('hidden');
-        seta.style.transform = 'rotate(0deg)';
-      }
-    }
-
-    function renderizarDados() {
-      const mesSelecionado = document.getElementById('filtro-mes').value || '10/2026';
-      const [mesNum, anoNum] = mesSelecionado.split('/');
-      document.getElementById('titulo-mes').innerText = `${NOMES_MESES[mesNum] || "OUTUBRO"} ${anoNum || "2026"}`;
-
-      let mesAnt = Number(mesNum) === 1 ? 12 : Number(mesNum) - 1;
-      let anoAnt = Number(mesNum) === 1 ? Number(anoNum) - 1 : Number(anoNum);
-      document.getElementById('subtitulo-ciclo').innerText = `CICLO: 08/${String(mesAnt).padStart(2, '0')}/${anoAnt} A 07/${mesNum}/${anoNum} • VENC. 14/${mesNum}/${anoNum}`;
-
-      let containerFat = document.getElementById('lista-faturas');
-      containerFat.innerHTML = '';
-
-      let totalEntradas = 0;
-      let qtdEntradas = 0;
-      let totalSaidasFixas = 0;
-      let qtdSaidas = 0;
-      const ehOutubro2026 = (mesSelecionado === '10/2026');
-
-      (dadosGlobais.compromissos || []).forEach(item => {
-        let [compromisso, tipo, valorPrevisto, dia, regra, status, valorReal] = item;
-        if (!compromissoPertenceAoMes(compromisso, mesSelecionado)) return;
-
-        let isRealizado = ehOutubro2026 && (String(status).includes('PAGO') || String(status).includes('RECEBIDO'));
-        let valorExibido = (isRealizado && valorReal !== "" && !isNaN(parseNum(valorReal))) ? parseNum(valorReal) : parseNum(valorPrevisto);
-        
-        if (String(tipo).toUpperCase() === 'ENTRADA') { totalEntradas += valorExibido; qtdEntradas++; }
-        if (String(tipo).toUpperCase() === 'SAIDA') { totalSaidasFixas += valorExibido; qtdSaidas++; }
+      // 1. Atualiza Saldo Conta Corrente e Limite Cartão a partir da aba Contas
+      (dados.contas || []).forEach(c => {
+        const tipo = String(c[2] || '').toLowerCase();
+        if (tipo.includes('corrente')) {
+          document.getElementById('card-saldo-nubank').innerText = `R$ ${moeda(num(c[5]))}`;
+        } else if (tipo.includes('crédito')) {
+          document.getElementById('card-limite-nubank').innerText = `Limite disp.: R$ ${moeda(num(c[8]))}`;
+        }
       });
 
-      const faturaObj = mapaFaturasPorCompetencia[mesSelecionado] || {
-        cartao: 'GOLD',
-        vencimento: `14/${mesSelecionado}`,
-        valorTotal: 0,
-        somaExtrato: 0,
-        itens: []
+      // 2. Calcula Entradas, Saídas Fixas e Fatura do Mês (Corrigindo Pagamentos Parciais!)
+      let totalEntradasPrevisto = 0;
+      let totalEntradasRecebido = 0;
+      let totalFixasPrevisto = 0;
+      let totalFixasPago = 0;
+
+      const gastosPorCategoria = {};
+      const detalhesPorCategoria = {};
+
+      (dados.categoriasLimites || []).forEach(c => {
+        const nomeCat = String(c[0]).trim();
+        gastosPorCategoria[nomeCat] = 0;
+        detalhesPorCategoria[nomeCat] = [];
+      });
+
+      const adicionarAoGrupoCategoria = (cat, valorPrevisto, textoDetalhe) => {
+        const c = cat || 'Dinheiro / Diversos';
+        if (gastosPorCategoria[c] === undefined) {
+          gastosPorCategoria[c] = 0;
+          detalhesPorCategoria[c] = [];
+        }
+        gastosPorCategoria[c] += valorPrevisto;
+        if (textoDetalhe) detalhesPorCategoria[c].push(textoDetalhe);
       };
 
-      const totalFaturasMes = Number(faturaObj.valorTotal || 0);
-      const itensExtrato = faturaObj.itens || [];
+      (dados.compromissos || []).forEach(item => {
+        const nome = String(item[0] || '');
+        const matchTag = nome.match(/\[(\d{2}\/\d{4})\]/);
+        if (matchTag && matchTag[1] !== mesSelecionado) return;
 
-      let htmlTxs = itensExtrato.length === 0
-        ? '<div class="text-[11px] text-slate-400 py-1 uppercase">SEM LANÇAMENTOS NESTE CICLO.</div>'
-        : itensExtrato.map(it => {
-            const corValor = it.ehEstorno ? 'text-emerald-400' : 'text-rose-400';
-            const sinal = it.ehEstorno ? '- R$ ' : 'R$ ';
-            return `
-              <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-700/40 last:border-0">
-                <div class="pr-2">
-                  <span class="text-slate-200 font-medium block uppercase">${it.descricao}</span>
-                  <span class="text-[10px] text-slate-400 uppercase">${it.data} • ${it.parcela}</span>
-                </div>
-                <span class="${corValor} font-bold whitespace-nowrap">${sinal}${formatarMoeda(Math.abs(it.valor))}</span>
-              </div>
-            `;
-          }).join('');
+        const nomeLimpo = nome.replace(/\s*\[\d{2}\/\d{4}\]/g, '').trim();
+        const tipo = String(item[1] || '').toUpperCase();
+        const previsto = num(item[2]);
+        const status = String(item[5] || 'PENDENTE').toUpperCase();
+        const real = ehOutubro2026 ? num(item[6]) : 0;
+        const cat = String(item[9] || '') || autoCategorizarLocal(nomeLimpo);
 
-      containerFat.innerHTML += `
-        <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 overflow-hidden">
-          <div onclick="toggleFatura('fatura-unica')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
-            <div>
-              <span class="font-semibold text-white block text-sm uppercase">NUBANK (${faturaObj.cartao})</span>
-              <span class="text-[11px] text-slate-400 uppercase">VENCIMENTO: ${faturaObj.vencimento}</span>
+        if (tipo === 'ENTRADA') {
+          totalEntradasPrevisto += previsto;
+          if (ehOutubro2026 && status.includes('RECEBIDO')) {
+            totalEntradasRecebido += (real > 0 ? real : previsto);
+          }
+        } else if (tipo === 'SAIDA') {
+          const compromissadoReal = Math.max(previsto, real);
+          totalFixasPrevisto += compromissadoReal;
+
+          let pagoItem = 0;
+          if (ehOutubro2026 && status.includes('PAGO')) {
+            pagoItem = status.includes('PARCIAL') ? real : compromissadoReal;
+          }
+          totalFixasPago += pagoItem;
+
+          const faltaItem = Math.max(0, compromissadoReal - pagoItem);
+          let resumoItem = '';
+          if (pagoItem > 0 && faltaItem > 0) {
+            resumoItem = `${nomeLimpo.split('(')[0].trim()}: falta R$ ${moeda(faltaItem)} (pago parcial R$ ${moeda(pagoItem)})`;
+          } else if (faltaItem > 0) {
+            resumoItem = `${nomeLimpo.split('(')[0].trim()}: R$ ${moeda(faltaItem)}`;
+          }
+
+          adicionarAoGrupoCategoria(cat, compromissadoReal, resumoItem);
+        }
+      });
+
+      // Soma Fatura do Nubank na categoria "Cartões de Crédito"
+      const faturaMesObj = mapaFaturasNubank[mesSelecionado] || { valorTotal: 0, itens: [] };
+      const valorFaturaNubank = num(faturaMesObj.valorTotal);
+      adicionarAoGrupoCategoria('Cartões de Crédito', valorFaturaNubank, `Nubank Gold: R$ ${moeda(valorFaturaNubank)}`);
+
+      // Soma Lançamentos Manuais em Dinheiro do mês selecionado
+      let totalDinheiroSaida = 0;
+      (dados.dinheiro || []).forEach(d => {
+        if (String(d[5] || '') !== mesSelecionado) return;
+        const tipoDin = String(d[3] || 'SAIDA').toUpperCase();
+        const valDin = num(d[4]);
+        const catDin = String(d[2] || 'Dinheiro / Diversos');
+        if (tipoDin === 'SAIDA') {
+          totalDinheiroSaida += valDin;
+          adicionarAoGrupoCategoria(catDin, valDin, `${d[1]}: R$ ${moeda(valDin)}`);
+        } else {
+          totalEntradasPrevisto += valDin;
+          totalEntradasRecebido += valDin;
+        }
+      });
+
+      const totalDespesasMes = totalFixasPrevisto + valorFaturaNubank + totalDinheiroSaida;
+      const totalJaPagoMes = totalFixasPago + totalDinheiroSaida;
+      const faltaPagarMes = Math.max(0, totalDespesasMes - totalJaPagoMes);
+      const faltaReceberMes = Math.max(0, totalEntradasPrevisto - totalEntradasRecebido);
+      const sobraPrevistaMes = totalEntradasPrevisto - totalDespesasMes;
+      const percPago = totalDespesasMes > 0 ? Math.min(100, Math.round((totalJaPagoMes / totalDespesasMes) * 100)) : 0;
+
+      // Atualiza Topo
+      document.getElementById('card-falta-pagar').innerText = `R$ ${moeda(faltaPagarMes)}`;
+      document.getElementById('barra-geral-pago').style.width = `${Math.max(4, percPago)}%`;
+      document.getElementById('texto-pago-total').innerText = `Já pago: R$ ${moeda(totalJaPagoMes)} • Total: R$ ${moeda(totalDespesasMes)}`;
+      document.getElementById('card-falta-receber').innerText = `R$ ${moeda(faltaReceberMes)}`;
+      document.getElementById('card-ja-entrou').innerText = `(Já entrou: R$ ${moeda(totalEntradasRecebido)})`;
+
+      const elSobra = document.getElementById('card-sobra-prevista');
+      elSobra.innerText = `${sobraPrevistaMes >= 0 ? '+R$ ' : '-R$ '}${moeda(Math.abs(sobraPrevistaMes))}`;
+      elSobra.className = sobraPrevistaMes >= 0
+        ? "text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 inline-block mt-1"
+        : "text-xs font-semibold px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/25 inline-block mt-1";
+
+      // 3. Renderiza Barras Horizontais de Limites por Categoria
+      const containerBarras = document.getElementById('lista-barras-categorias');
+      containerBarras.innerHTML = (dados.categoriasLimites || []).map(catRow => {
+        const nomeCat = String(catRow[0]).trim();
+        const limiteCat = num(catRow[1]);
+        const corHex = String(catRow[2] || '#38bdf8');
+        const gastoAtual = gastosPorCategoria[nomeCat] || 0;
+        const pct = limiteCat > 0 ? Math.min(100, Math.round((gastoAtual / limiteCat) * 100)) : 0;
+        const corBarra = gastoAtual > limiteCat ? '#f43f5e' : corHex;
+        const subtexto = (detalhesPorCategoria[nomeCat] || []).slice(0, 2).join(' • ');
+
+        return `
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-baseline text-xs">
+              <span class="font-medium text-zinc-100">${nomeCat} • <strong class="text-white">R$ ${moeda(gastoAtual)}</strong> <span class="text-zinc-400 font-normal">/ R$ ${moeda(limiteCat)}</span></span>
             </div>
-            <div class="flex items-center space-x-2">
-              <span class="font-bold text-rose-400 text-sm">R$ ${formatarMoeda(totalFaturasMes)}</span>
-              <svg id="seta-fatura-unica" class="w-4 h-4 text-slate-400 transition-transform duration-200" style="transform: rotate(180deg);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            <div class="w-full h-2 bg-zinc-800/90 rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-500" style="width: ${pct}%; background-color: ${corBarra}"></div>
             </div>
+            ${subtexto ? `<p class="text-[10px] text-zinc-400 leading-tight">${subtexto}</p>` : ''}
           </div>
-          <div id="fatura-unica" class="bg-slate-900/90 px-3 py-2.5 border-t border-slate-700/60 space-y-1.5">
-            <div class="flex justify-between items-center mb-1">
-              <span class="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">EXTRATO DA FATURA (${itensExtrato.length} LANÇAMENTOS)</span>
-              <span class="text-[10px] text-slate-300 uppercase font-semibold">SOMA LÍQUIDA: R$ ${formatarMoeda(faturaObj.somaExtrato)}</span>
-            </div>
-            ${htmlTxs}
-          </div>
-        </div>
-      `;
+        `;
+      }).join('');
 
-      let totalGeralDespesas = totalSaidasFixas + totalFaturasMes;
-      let saldoLiquido = totalEntradas - totalGeralDespesas;
-
-      document.getElementById('total-entradas').innerText = `R$ ${formatarMoeda(totalEntradas)}`;
-      document.getElementById('qtd-entradas').innerText = `${qtdEntradas} LANÇAMENTO(S)`;
-      
-      document.getElementById('total-saidas').innerText = `R$ ${formatarMoeda(totalGeralDespesas)}`;
-      document.getElementById('qtd-saidas').innerText = `${qtdSaidas} FIXA(S) + FATURA`;
-      
-      document.getElementById('total-faturas').innerText = `R$ ${formatarMoeda(totalFaturasMes)}`;
-      
-      const elSaldo = document.getElementById('saldo-liquido');
-      elSaldo.innerText = `R$ ${formatarMoeda(saldoLiquido)}`;
-      elSaldo.className = saldoLiquido >= 0 ? "text-lg font-bold text-emerald-400" : "text-lg font-bold text-rose-400";
+      // 4. Renderiza a Lista de Lançamentos conforme a Aba Selecionada
+      renderizarListaExtrato(mesSelecionado, faturaMesObj);
+      popularSelectsDeCategoriasNosModais();
     }
 
-    async function salvarCompromisso(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btn-salvar');
-      btn.innerText = "A GUARDAR...";
-      btn.disabled = true;
+    function renderizarListaExtrato(mesSelecionado, faturaMesObj) {
+      const container = document.getElementById('lista-lancamentos-mes');
+      const titulo = document.getElementById('titulo-lista-extrato');
+      let itensParaExibir = [];
 
-      const payload = {
-        nome: document.getElementById('novo-nome').value,
-        tipo: document.getElementById('novo-tipo').value,
-        valor: document.getElementById('novo-valor').value,
-        dia: document.getElementById('novo-dia').value,
-        parcelas: document.getElementById('novo-parcelas').value,
-        competenciaInicial: document.getElementById('filtro-mes').value || '10/2026'
-      };
+      if (abaAtual === 'categorias' || abaAtual === 'cartao') {
+        titulo.innerText = abaAtual === 'cartao'
+          ? `Extrato Cartão Nubank (${mesSelecionado})`
+          : `Lançamentos do Mês`;
 
+        // Compras do Cartão
+        (faturaMesObj.itens || []).forEach(it => {
+          itensParaExibir.push({
+            id: it.id,
+            data: it.dataCurta,
+            descricao: it.descricao,
+            valor: it.valor,
+            categoria: it.categoria,
+            origemTipo: 'TRANSACAO',
+            subtitulo: it.ehEstorno ? 'Estorno / Crédito na fatura' : 'Cartão Nubank'
+          });
+        });
+
+        // Se estiver na visão geral, inclui também os lançamentos em dinheiro do mês
+        if (abaAtual === 'categorias') {
+          (dados.dinheiro || []).filter(d => String(d[5]) === mesSelecionado).forEach(d => {
+            itensParaExibir.push({
+              id: String(d[6]),
+              data: String(d[0]).substring(0, 5),
+              descricao: String(d[1]),
+              valor: num(d[4]),
+              categoria: String(d[2]),
+              origemTipo: 'DINHEIRO',
+              subtitulo: 'Inserido manualmente em dinheiro'
+            });
+          });
+        }
+      } else if (abaAtual === 'banco') {
+        titulo.innerText = `Extrato Conta Corrente (${mesSelecionado})`;
+        (dados.transacoes || []).forEach(tx => {
+          const origem = String(tx[2] || '').toLowerCase();
+          if (origem.includes('crédito')) return;
+          const dBr = dataBr(tx[0]);
+          const p = dBr.split('/');
+          if (p.length === 3 && `${p[1]}/${p[2]}` === mesSelecionado) {
+            const desc = String(tx[3] || '');
+            const cat = (tx[5] && tx[5] !== 'Sem categoria') ? String(tx[5]) : autoCategorizarLocal(desc);
+            itensParaExibir.push({
+              id: String(tx[13] || ''),
+              data: `${p[0]}/${p[1]}`,
+              descricao: desc,
+              valor: Math.abs(num(tx[7])),
+              categoria: cat,
+              origemTipo: 'TRANSACAO',
+              subtitulo: `${tx[9] || ' Movimentação'} • ${tx[11] || tx[10] || 'Conta Nubank'}`
+            });
+          }
+        });
+      } else if (abaAtual === 'dinheiro') {
+        titulo.innerText = `Lançamentos em Dinheiro & Contas Fixas (${mesSelecionado})`;
+        (dados.dinheiro || []).filter(d => String(d[5]) === mesSelecionado).forEach(d => {
+          itensParaExibir.push({
+            id: String(d[6]),
+            data: String(d[0]).substring(0, 5),
+            descricao: String(d[1]),
+            valor: num(d[4]),
+            categoria: String(d[2]),
+            origemTipo: 'DINHEIRO',
+            subtitulo: 'Lançamento em espécie (Dinheiro)'
+          });
+        });
+
+        (dados.compromissos || []).filter(c => String(c[1]).toUpperCase() === 'SAIDA').forEach(c => {
+          const nome = String(c[0]);
+          itensParaExibir.push({
+            id: nome,
+            data: `Dia ${String(c[3]).padStart(2, '0')}`,
+            descricao: nome,
+            valor: num(c[2]),
+            categoria: String(c[9] || autoCategorizarLocal(nome)),
+            origemTipo: 'FIXA',
+            subtitulo: `Compromisso fixo • ${c[5] || 'PENDENTE'}`
+          });
+        });
+      }
+
+      if (itensParaExibir.length === 0) {
+        container.innerHTML = `<p class="text-xs text-zinc-500 py-4 text-center">Nenhum lançamento encontrado para este filtro.</p>`;
+        return;
+      }
+
+      container.innerHTML = itensParaExibir.map(item => `
+        <div class="py-2.5 flex justify-between items-center gap-2">
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-medium text-zinc-100 truncate">${item.data} • ${item.descricao}</p>
+            <span class="text-[10px] text-zinc-500 block truncate">${item.subtitulo}</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-xs font-semibold text-zinc-200">R$ ${moeda(Math.abs(item.valor))}</span>
+            ${renderizarSelectCategoriaItem(item.id, item.origemTipo, item.categoria)}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function alterarCategoriaItem(origemTipo, idItem, novaCategoria) {
+      // Atualiza imediatamente na memória local para resposta instantânea na tela
+      if (origemTipo === 'TRANSACAO') {
+        const tx = (dados.transacoes || []).find(t => String(t[13]) === idItem);
+        if (tx) tx[5] = novaCategoria;
+      } else if (origemTipo === 'FIXA') {
+        const fx = (dados.compromissos || []).find(c => String(c[0]) === idItem);
+        if (fx) fx[9] = novaCategoria;
+      } else if (origemTipo === 'DINHEIRO') {
+        const dn = (dados.dinheiro || []).find(d => String(d[6]) === idItem);
+        if (dn) dn[2] = novaCategoria;
+      }
+      renderizarInterface();
+
+      // Salva em background na planilha Google Sheets
       try {
-        await fetch(URL_DO_WEB_APP, { method: 'POST', body: JSON.stringify(payload) });
-        fecharModal();
-        document.getElementById('form-novo').reset();
-        await carregarDados();
-        alert("COMPROMISSO GUARDADO COM SUCESSO!");
-      } catch (err) {
-        alert("ERRO AO GUARDAR.");
-      } finally {
-        btn.innerText = "SALVAR COMPROMISSO";
-        btn.disabled = false;
+        await fetch(URL_DO_WEB_APP, {
+          method: 'POST',
+          body: JSON.stringify({
+            acao: 'ALTERAR_CATEGORIA',
+            origem: origemTipo,
+            id: idItem,
+            novaCategoria: novaCategoria
+          })
+        });
+      } catch (e) {
+        console.error('Erro ao gravar categoria na planilha:', e);
       }
     }
 
-    carregarDados();
-  </script>
-</body>
-</html>
+    function popularSelectsDeCategoriasNosModais() {
+      const cats = obterListaCategoriasNomes();
+      const selectLanc = document.getElementById('lanc-categoria');
+      const datalistCat = document.getElementById('datalist-categorias');
+
+      selectLanc.innerHTML = `<option value="">Detectar automaticamente</option>` +
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+      datalistCat.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+    }
+
+    function abrirModalLancamento() {
+      document.getElementById('modal-lancamento').classList.remove('hidden');
+      document.getElementById('modal-lancamento').classList.add('flex');
+    }
+    function fecharModalLancamento() {
+      document.getElementById('modal-lancamento').classList.add('hidden');
+      document.getElementById('modal-lancamento').classList.remove('flex');
+    }
+
+    function abrirModalCategorias() {
+      document.getElementById('modal-categorias').classList.remove('hidden');
+      document.getElementById('modal-categorias').classList.add('flex');
+    }
+    function fecharModalCategorias() {
+      document.getElementById('modal-categorias').classList.add('hidden');
+      document.getElementById('modal-categorias').classList.remove('flex');
+    }
+
+    async function salvarNovoLancamento(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-salvar-lanc');
+      btn.innerText = "Salvando...";
+      btn.disabled = true;
+
+      const nome = document.getElementById('lanc-nome').value;
+      const catEscol
