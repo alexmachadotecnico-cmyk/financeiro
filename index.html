@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0b0d">
 <title>Painel financeiro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,9 +14,10 @@
 <style>
 :root{--bg:#0a0b0d;--card:#111317;--card2:#15181d;--tx:#e8eaed;--mut:#8b93a1;--mut2:#aab1bd;--red:#fb7185;--grn:#34d399;--teal:#2dd4bf;--amb:#fbbf24;--vio:#a78bfa;--line:rgba(255,255,255,.07)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg)}
+html,body{margin:0;height:100%;background:var(--bg);touch-action:manipulation;overscroll-behavior:none}
 body{color:var(--tx);font-family:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12.5px;font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%}
-button{font-family:inherit;color:inherit;cursor:pointer}
+button{font-family:inherit;color:inherit;cursor:pointer;touch-action:manipulation;transition:opacity .08s,transform .08s}
+button:active:not(:disabled){opacity:.65;transform:scale(.985)}
 input,select{font-family:inherit;color:var(--tx)}
 #app{max-width:430px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;padding:calc(14px + env(safe-area-inset-top)) 14px 0;background:radial-gradient(120% 40% at 50% -8%,rgba(52,211,153,.13),rgba(10,11,13,0) 70%),var(--bg);position:relative}
 .main{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:8px;overscroll-behavior:contain}
@@ -82,9 +86,13 @@ select.in option{background:#15181d}
 .trk.on{background:var(--grn)}
 .trk i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:99px;background:#0a0b0d}
 .trk.on i{left:16px}
+.ov.anim .bk{animation:fade .18s ease-out}
+.ov.anim .sh{animation:subir .2s cubic-bezier(.2,.8,.2,1)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes subir{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
 .skel{height:120px;border-radius:20px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.08),rgba(255,255,255,.04));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{from{background-position:200% 0}to{background-position:-200% 0}}
-@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+@media (prefers-reduced-motion:reduce){.skel,.ov.anim .bk,.ov.anim .sh{animation:none}button{transition:none}}
 .center{padding:40px 20px;text-align:center}
 </style>
 </head>
@@ -125,7 +133,7 @@ const chip = (t, tom) => t ? '<span class="chip ' + (TONS[tom] || 'c-muted') + '
    ESTADO
    ==================================================================== */
 const S = {
-  token: ls.get(CHAVE_TOKEN) || '', d: null, mes: '', carregando: false, busy: false, erro: '', sincronizando: false,
+  token: ls.get(CHAVE_TOKEN) || '', d: null, mes: '', meses: [], carregando: false, pend: 0, geracao: 0, fila: Promise.resolve(), erro: '', sincronizando: false,
   sheet: '', fat: '', exp: '', novo: false, ntab: 'prevista', ptipo: 'saida', nv: {}, nvConta: '',
   cfg: false, cfgOpen: '', ndraft: '', rn: {},
   ed: null, edTab: 'cat', edCat: '', edFixa: '', lembrar: true,
@@ -137,7 +145,7 @@ const sc = {};            // posição de rolagem por área, para não "pular" a
 /* ====================================================================
    REDE
    ==================================================================== */
-async function chamar(corpo, opts) {
+async function chamarTudo(corpo) {
   const resp = await fetch(URL_APP, {
     method: 'POST', redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },     // evita pré-verificação CORS no Apps Script
@@ -150,40 +158,89 @@ async function chamar(corpo, opts) {
     if (m === 'TOKEN_INVALIDO' || m === 'CONFIGURE_TOKEN') { const er = new Error(m); er.token = true; throw er; }
     throw new Error(m);
   }
-  return j.dados;
+  return j;
 }
-function aplicar(d) {
-  S.d = d; S.mes = d.mes; S.erro = '';
-  const cache = (() => { try { return JSON.parse(ls.get(CHAVE_CACHE) || '{}'); } catch (e) { return {}; } })();
-  cache[d.mes] = d;
-  const chaves = Object.keys(cache); if (chaves.length > 4) delete cache[chaves[0]];
-  ls.set(CHAVE_CACHE, JSON.stringify(cache));
+const chamar = async corpo => (await chamarTudo(corpo)).dados;
+
+/* ---- memória dos meses: abrir um mês já visto é instantâneo; a atualização acontece por trás ---- */
+const FRESCO = 45000;                       // até 45 s o mês em memória vale como atual
+const MC = {};                              // comp -> { d, t }
+let persistirT = null;
+function persistir() {
+  clearTimeout(persistirT);
+  persistirT = setTimeout(() => {
+    const o = {}; Object.keys(MC).sort((a, b) => MC[b].t - MC[a].t).slice(0, 6).forEach(k => { o[k] = MC[k].d; });
+    ls.set(CHAVE_CACHE, JSON.stringify(o));
+  }, 800);
 }
-async function carregar(mes, silencioso) {
-  S.carregando = true; if (!silencioso) render();
-  try { aplicar(await chamar({ acao: 'LER', mes: mes || S.mes || undefined })); }
+function guardar(d) { MC[d.mes] = { d: d, t: Date.now() }; if (d.meses && d.meses.length) S.meses = d.meses; persistir(); }
+const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function mostrar(d) {                       // só mexe na tela se for o mês que a pessoa está vendo
+  guardar(d);
+  if (S.mes === '' || S.mes === d.mes) {
+    const mudou = !S.d || !igual(S.d, d);
+    S.mes = d.mes; S.d = d; S.erro = ''; S.carregando = false;
+    if (mudou) render();
+  }
+}
+function velho(c) { return !MC[c] || Date.now() - MC[c].t > FRESCO; }
+async function buscar(mes) {
+  try { mostrar(await chamar({ acao: 'LER', mes: mes || undefined })); }
   catch (e) { tratarErro(e); }
   S.carregando = false; render();
+}
+function irMes(c) {
+  S.picker = false; S.sheet = ''; S.mes = c;
+  if (MC[c]) { S.d = MC[c].d; S.carregando = false; render(); if (velho(c)) prefetch(c); }
+  else { S.d = null; S.carregando = true; render(); buscar(c).then(() => prefetch(c)); }
+}
+let pfBusy = false, pfT = null;
+function prefetch(centro) {                 // traz os meses vizinhos numa chamada só (a planilha é lida uma vez)
+  clearTimeout(pfT);
+  pfT = setTimeout(async () => {
+    if (pfBusy || S.pend > 0 || S.sincronizando || !S.token || !centro) return;
+    const i = S.meses.indexOf(centro); if (i < 0) return;
+    const alvo = [-1, 1, -2, 2].map(k => S.meses[i + k]).filter(Boolean).filter(velho);
+    if (!alvo.length && !velho(centro)) return;
+    pfBusy = true; const ger = S.geracao;
+    try {
+      const j = await chamarTudo({ acao: 'LER_MESES', mes: centro, meses: alvo });
+      if (ger === S.geracao && S.pend === 0) { mostrar(j.dados); Object.keys(j.extras || {}).forEach(k => guardar(j.extras[k])); }
+    } catch (e) { if (e.token) tratarErro(e); }
+    pfBusy = false;
+  }, 350);
 }
 function tratarErro(e) {
   if (e.token) { S.token = ''; ls.del(CHAVE_TOKEN); S.erro = e.message === 'CONFIGURE_TOKEN' ? 'O servidor ainda não tem um token configurado (Propriedades do script → TOKEN_ACESSO).' : 'Token inválido. Digite de novo.'; }
   else if (!S.d) S.erro = 'Não consegui carregar: ' + e.message;
   else toast('Não consegui falar com o servidor: ' + e.message, true);
+  render();
 }
-async function acao(corpo, msgOk, depois) {
-  if (S.busy) return false;
-  S.busy = true; render();
-  try {
-    const d = await chamar(Object.assign({ mes: S.mes }, corpo));
-    aplicar(d); S.busy = false;
-    if (depois) depois();
-    if (msgOk) toast(msgOk);
-    render(); return true;
-  } catch (e) {
-    S.busy = false;
-    if (e.token) tratarErro(e); else toast(e.message, true);
-    render(); return false;
-  }
+/* Gravações: a tela responde na hora (fecha a folha, ajusta o que dá) e o servidor confirma por trás, em fila. */
+function acao(corpo, msgOk, o) {
+  o = o || {};
+  S.geracao++; S.pend++;
+  const mes = S.mes;
+  if (o.otimista) o.otimista();
+  if (o.fecha) o.fecha();
+  render();
+  S.fila = S.fila.then(async () => {
+    try {
+      const d = await chamar(Object.assign({ mes: mes }, corpo));
+      S.pend--;
+      Object.keys(MC).forEach(k => { if (k !== d.mes) MC[k].t = 0; });       // os outros meses podem ter mudado
+      if (o.ok) o.ok();
+      if (S.pend === 0) mostrar(d); else guardar(d);
+      if (msgOk) toast(msgOk);
+      if (S.pend === 0) prefetch(S.mes);
+    } catch (e) {
+      S.pend--;
+      if (e.token) tratarErro(e); else toast(e.message, true);
+      if (o.falhou) o.falhou();
+      if (S.pend === 0 && S.token) await buscar(S.mes);                       // devolve a tela ao que o servidor tem
+    }
+    render();
+  });
 }
 let toastT = null;
 function toast(t, erro) { S.toast = { t: t, erro: !!erro }; clearTimeout(toastT); toastT = setTimeout(() => { S.toast = null; renderToast(); }, erro ? 6000 : 2600); renderToast(); }
@@ -288,8 +345,10 @@ function sugestoesHtml() {
 function cabecalhoFolha(titulo, fechar, extra) {
   return '<div class="shh"><div class="grip" aria-hidden="true"></div><div class="row" style="justify-content:space-between;min-height:44px"><span class="h14">' + titulo + '</span><button type="button" class="close" data-a="' + fechar + '">Fechar</button></div>' + (extra || '') + '</div>';
 }
+let vistos = {}, atuais = {};
 function folha(z, cls, rotulo, conteudo, fechar) {
-  return '<div class="ov" style="z-index:' + z + '" role="dialog" aria-modal="true" aria-label="' + esc(rotulo) + '"><button type="button" class="bk" aria-label="Fechar" data-a="' + fechar + '"></button><div class="sh ' + cls + '">' + conteudo + '</div></div>';
+  atuais[rotulo + z] = 1;
+  return '<div class="ov' + (vistos[rotulo + z] ? '' : ' anim') + '" style="z-index:' + z + '" role="dialog" aria-modal="true" aria-label="' + esc(rotulo) + '"><button type="button" class="bk" aria-label="Fechar" data-a="' + fechar + '"></button><div class="sh ' + cls + '">' + conteudo + '</div></div>';
 }
 
 function folhaDetalhe() {
@@ -364,7 +423,7 @@ function folhaEd() {
     const c = '<div class="shh"><div class="grip"></div><div class="row" style="justify-content:space-between;min-height:44px"><span class="h14">Baixa de conta fixa</span><button type="button" class="close" data-a="fechar-ed">Fechar</button></div></div>'
       + '<div class="shb" style="display:flex;flex-direction:column;gap:10px"><div class="row" style="justify-content:space-between;gap:10px"><span><span class="nm" style="display:block;font-size:13px;font-weight:700">' + esc(e.nome) + '</span><span class="sb">' + esc(e.sub || '') + '</span></span><span class="vl">' + esc(brl(e.valor)) + '</span></div>'
       + '<div class="note">Desfazer apaga esta baixa: a conta volta para Falta pagar e, se foi dinheiro, o valor volta para Dinheiro em mãos. Se foi o app que reconheceu sozinho, ele não faz a mesma ligação de novo.</div>'
-      + '<button type="button" class="danger" data-a="desfazer" data-v="' + esc(e.baixaId) + '"' + (S.busy ? ' disabled' : '') + '>Desfazer esta baixa</button></div>';
+      + '<button type="button" class="danger" data-a="desfazer" data-v="' + esc(e.baixaId) + '">Desfazer esta baixa</button></div>';
     return folha(30, 'alt baixo', 'Baixa', c, 'fechar-ed');
   }
   const lista = d.categorias.todas.map(c => ({ id: c.nome, nome: c.nome, cor: c.cor })).concat([{ id: SEM, nome: 'Sem categoria', cor: '#6b7280' }]);
@@ -384,7 +443,7 @@ function folhaEd() {
   const lemSub = fixa ? (S.lembrar ? 'As próximas saídas de ' + e.nome + ' dão baixa em ' + (fx ? fx.nomeExib : 'a conta escolhida') + ' sozinhas' : 'Só esta saída dá baixa agora')
     : (S.lembrar ? 'Só este lançamento muda agora. Os próximos de ' + e.nome + (S.edCat === SEM ? ' ficam sem categoria' : ' entram em ' + catNome(S.edCat) + ' sozinhos') : 'Só este lançamento muda; os próximos seguem a regra de antes');
   corpo += '<button type="button" class="toggle" data-a="lembrar" style="margin-top:6px"><span class="trk' + (S.lembrar ? ' on' : '') + '" aria-hidden="true"><i></i></span><span style="display:block;min-width:0"><span class="nm" style="display:block">' + esc(lemTxt) + '</span><span class="sb">' + esc(lemSub) + '</span></span></button>';
-  corpo += '<button type="button" class="save" style="margin-top:6px" data-a="salvar-ed"' + (S.busy || (fixa && !fx) ? ' disabled' : '') + '>' + esc(fixa ? (fx ? 'Dar baixa em ' + fx.nomeExib : 'Escolha a conta fixa') : 'Salvar categoria') + '</button>';
+  corpo += '<button type="button" class="save" style="margin-top:6px" data-a="salvar-ed"' + ((fixa && !fx) ? ' disabled' : '') + '>' + esc(fixa ? (fx ? 'Dar baixa em ' + fx.nomeExib : 'Escolha a conta fixa') : 'Salvar categoria') + '</button>';
   return folha(30, 'alt baixo', 'Esta saída', cab + '<div class="shb" data-sc="ed" style="display:flex;flex-direction:column;gap:6px">' + corpo + '</div>', 'fechar-ed');
 }
 
@@ -432,7 +491,7 @@ function folhaFixEd() {
     + '<div style="display:flex;gap:8px;margin-top:8px"><input class="in" type="text" maxlength="60" placeholder="Nome do favorecido" aria-label="Nome do favorecido" value="' + esc(x.novaPal) + '" data-in="fx" data-k="novaPal" style="flex:1;min-width:0;width:auto"><button type="button" data-a="fx-add-pal" style="min-height:44px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:none;font-size:12px;font-weight:700">Adicionar</button></div>'
     + '<div class="sb" style="line-height:1.45;margin-top:6px">Quando chegar do banco uma saída com esse nome no mês, o app dá baixa sozinho. Se vier menos que o previsto, fica como Parcial.</div></div>'
     + (x.id ? '<div><span style="display:block;font-size:11px;color:var(--mut);font-weight:600;margin-bottom:4px">Se mudar o valor ou o dia, vale a partir de</span><div class="tabs">' + pill(0, 'desde', 'este', 'Este mês') + pill(0, 'desde', 'prox', 'Próximo mês') + '</div><div class="sb" style="margin-top:6px">' + (x.desde === 'este' ? 'O mês atual passa a usar o novo valor. Os meses anteriores não mudam.' : 'O mês atual fica como está; a mudança começa no mês que vem.') + '</div></div>' : '')
-    + '<button type="button" class="save" data-a="fx-salvar"' + (S.busy ? ' disabled' : '') + '>Salvar</button>'
+    + '<button type="button" class="save" data-a="fx-salvar">Salvar</button>'
     + (x.id ? '<button type="button" class="danger" data-a="fx-encerrar">' + (x.conf ? 'Toque de novo para encerrar' : 'Encerrar esta conta') + '</button><div class="sb" style="text-align:center;margin-top:-6px">Os meses já pagos continuam no histórico.</div>' : '') + '</div>';
   return folha(30, 'alt alto', 'Conta fixa', cabecalhoFolha(x.id ? 'Editar conta fixa' : 'Nova conta fixa', 'fechar-fixed', '<div style="border-bottom:1px solid var(--line)"></div>') + corpo, 'fechar-fixed');
 }
@@ -461,7 +520,7 @@ function folhaNovo() {
   if (tab === 'prevista' || tab === 'hora') c += '<label class="fld">Categoria<select class="in" data-in="nvsel" data-k="cat">' + d.categorias.todas.map(x => '<option value="' + esc(x.nome) + '"' + ((n.cat || 'Diversos') === x.nome ? ' selected' : '') + '>' + esc(x.nome) + '</option>').join('') + '</select></label>';
   if (tab === 'prevista') c += '<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px;font-size:11.5px;line-height:1.45;color:#aab1bd">' + esc(saida ? 'Exemplo: Havan em 6 parcelas de R$ 119,19 começando em novembro soma R$ 715,14. Cada parcela aparece em Falta pagar no mês dela.' : 'Exemplo: Ajuda para terapia de R$ 550,00 todo dia 17, sem parcelas. Aparece em Falta receber até chegar.') + '</div>';
   if (tab !== 'prevista') c += '<div class="row" style="justify-content:space-between;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px"><span style="font-size:11.5px;color:var(--mut)">Dinheiro em mãos</span><span style="font-size:11.5px;font-weight:700;color:' + TEAL + '">' + esc(brl(d.numeros.carteira)) + '</span></div>';
-  c += '<button type="button" class="save" style="margin-top:4px" data-a="nv-salvar"' + (S.busy ? ' disabled' : '') + '>' + esc(botoes[tab]) + '</button>';
+  c += '<button type="button" class="save" style="margin-top:4px" data-a="nv-salvar">' + esc(botoes[tab]) + '</button>';
   const cab = '<div class="shh"><div class="grip"></div><div class="row" style="justify-content:space-between;min-height:44px"><span class="h14">Novo lançamento</span><button type="button" class="close" data-a="fechar-novo">Fechar</button></div><div class="tabs" style="padding-bottom:12px;border-bottom:1px solid var(--line)">' + tabs.map(t => '<button type="button" class="tab' + (tab === t[0] ? ' on' : '') + '" data-a="ntab" data-v="' + t[0] + '">' + t[1] + '</button>').join('') + '</div></div>';
   return folha(20, '', 'Novo lançamento', cab + '<div class="shb" data-sc="novo" style="display:flex;flex-direction:column;gap:10px;padding-top:12px">' + c + '</div>', 'fechar-novo');
 }
@@ -482,10 +541,11 @@ function telaToken() {
 }
 function telaPrincipal() {
   const d = S.d; if (!d) {
-    return (S.erro ? '<div class="center"><div class="aviso erro" style="margin-bottom:12px">' + esc(S.erro) + '</div><button type="button" class="save" data-a="recarregar">Tentar de novo</button></div>' : '<div class="skel" aria-label="Carregando"></div><div class="skel"></div>');
+    const topo = S.mes ? '<div class="row"><div class="pill" style="padding-right:14px">' + esc(mesRot(S.mes)) + '</div></div>' : '';
+    return topo + (S.erro ? '<div class="center"><div class="aviso erro" style="margin-bottom:12px">' + esc(S.erro) + '</div><button type="button" class="save" data-a="recarregar">Tentar de novo</button></div>' : '<div class="skel" aria-label="Carregando"></div><div class="skel"></div>');
   }
   const n = d.numeros, all = secoes(d), cats = all._cats, sem = d.categorias.sem;
-  const banco = d.sync && d.sync.banco ? 'Banco: ' + d.sync.banco.slice(0, 5) + ' · ' + d.sync.banco.slice(11, 16) : 'Sem dados do banco';
+  const banco = S.pend > 0 ? 'Salvando…' : d.sync && d.sync.banco ? 'Banco: ' + d.sync.banco.slice(0, 5) + ' · ' + d.sync.banco.slice(11, 16) : 'Sem dados do banco';
   const avisos = (d.avisos || []).filter(a => a.n === 'erro' || a.n === 'aviso').map(a => '<div class="aviso ' + (a.n === 'erro' ? 'erro' : 'aviso') + '" role="status">' + esc(a.t) + '</div>').join('');
   const hero = d.hero, heroCor = hero.valor < 0 ? RED : GREEN;
   const f = n.fatura, stF = f ? ({ paga: ['Paga', 'green'], aberta: ['Aberta', 'amber'], fechada: ['Fechada', 'amber'], projecao: ['Prevista', 'muted'] }[f.status] || null) : null;
@@ -515,6 +575,7 @@ function telaPrincipal() {
    ==================================================================== */
 function render() {
   const raiz = document.getElementById('app'), ov = document.getElementById('overlays');
+  vistos = atuais; atuais = {};
   document.querySelectorAll('[data-sc]').forEach(el => { sc[el.dataset.sc] = el.scrollTop; });
   const ativo = document.activeElement, foco = ativo && ativo.dataset && ativo.dataset.in ? { in: ativo.dataset.in, k: ativo.dataset.k || '', ini: ativo.selectionStart, fim: ativo.selectionEnd } : null;
   if (!S.token) { raiz.innerHTML = telaToken(); ov.innerHTML = ''; return; }
@@ -548,20 +609,47 @@ function fechaTopo() {
 function abrirEd(o) {
   S.ed = o; S.edTab = 'cat'; S.edCat = o.catAtual || SEM; S.edFixa = ''; S.lembrar = true; render();
 }
+const r2 = v => Math.round(v * 100) / 100;
+function patchClassificar(id, cat) {         // mostra a nova categoria na hora; o servidor confirma em seguida
+  const d = S.d; if (!d) return;
+  d.itens.forEach(i => { if (i.id === id) { if (cat === SEM) delete i.cat; else i.cat = cat; } });
+  d.cartao.abas.forEach(a => a.itens.forEach(i => { if (i.id === id) i.cat = cat === SEM ? '' : cat; }));
+  const cs = d.categorias; let tx = null, nome = '';
+  [cs.sem].concat(cs.lista).forEach(c => {
+    if (!c || !c.itens) return;
+    for (let k = c.itens.length - 1; k >= 0; k--) {
+      const it = c.itens[k], j = it.tx ? it.tx.findIndex(t => t.id === id) : -1;
+      if (j < 0) continue;
+      tx = it.tx.splice(j, 1)[0]; nome = it.nome; it.n -= 1; it.valor = r2(it.valor - tx.valor); c.total = r2(c.total - tx.valor);
+      if (!it.tx.length) c.itens.splice(k, 1);
+    }
+  });
+  if (!tx) return;
+  let alvo;
+  if (cat === SEM) { if (!cs.sem) cs.sem = { total: 0, itens: [] }; alvo = cs.sem; }
+  else {
+    alvo = cs.lista.filter(c => c.nome === cat)[0];
+    if (!alvo) { const cor = (cs.todas.filter(c => c.nome === cat)[0] || {}).cor || '#64748b'; alvo = { nome: cat, cor: cor, total: 0, itens: [] }; cs.lista.push(alvo); }
+  }
+  let it = alvo.itens.filter(x => x.nome === nome)[0];
+  if (!it) { it = { nome: nome, valor: 0, n: 0, origem: tx.origem, data: tx.data, tx: [] }; alvo.itens.push(it); }
+  it.tx.push(tx); it.n += 1; it.valor = r2(it.valor + tx.valor); alvo.total = r2(alvo.total + tx.valor);
+  cs.total = r2(cs.lista.reduce((t, c) => t + c.total, 0));
+}
 const A = {
-  entrar() { const v = (S.nvTok || '').trim(); if (!v) return; S.token = v; ls.set(CHAVE_TOKEN, v); S.erro = ''; carregar(); },
-  recarregar() { S.erro = ''; carregar(); },
+  entrar() { const v = (S.nvTok || '').trim(); if (!v) return; S.token = v; ls.set(CHAVE_TOKEN, v); S.erro = ''; S.carregando = true; render(); buscar('').then(() => prefetch(S.mes)); },
+  recarregar() { S.erro = ''; S.carregando = true; render(); buscar(S.mes).then(() => prefetch(S.mes)); },
   abrir(e) { S.sheet = e.v; S.exp = ''; sc.det = 0; if (e.v === 'cartao') S.fat = ''; render(); },
   'fechar-sheet'() { S.sheet = ''; render(); },
   fat(e) { S.fat = e.v; render(); },
   exp(e) { S.exp = S.exp === e.v ? '' : e.v; render(); },
   picker() { S.picker = true; render(); },
   'fechar-picker'() { S.picker = false; render(); },
-  mes(e) { S.picker = false; S.sheet = ''; S.mes = e.v; carregar(e.v); },
+  mes(e) { irMes(e.v); },
   async sync() {
     if (S.sincronizando) return;
     S.sincronizando = true; render();
-    try { aplicar(await chamar({ acao: 'SYNC_PLUGGY', mes: S.mes })); toast('Dados do banco atualizados'); }
+    try { S.geracao++; const d = await chamar({ acao: 'SYNC_PLUGGY', mes: S.mes }); Object.keys(MC).forEach(k => { MC[k].t = 0; }); mostrar(d); toast('Dados do banco atualizados'); prefetch(S.mes); }
     catch (er) { if (er.token) tratarErro(er); else toast('Não consegui atualizar: ' + er.message, true); }
     S.sincronizando = false; render();
   },
@@ -577,7 +665,7 @@ const A = {
     const i = S.d.itens.filter(x => x.baixaId === e.v)[0]; if (!i) return;
     S.ed = { kind: 'baixa', baixaId: i.baixaId, nome: i.nome, valor: i.valor, sub: i.sub }; render();
   },
-  desfazer(e) { acao({ acao: 'DESFAZER_BAIXA', id: e.v }, 'Baixa desfeita', () => { S.ed = null; }); },
+  desfazer(e) { acao({ acao: 'DESFAZER_BAIXA', id: e.v }, 'Baixa desfeita', { fecha: () => { S.ed = null; } }); },
   'baixa-conta'(e) { S.novo = true; S.ntab = 'baixa'; S.nvConta = e.v; const i = S.d.itens.filter(x => x.contaId === e.v && x.g === 'falta-pagar')[0]; S.nv = { valor: i ? String(i.valor).replace('.', ',') : '' }; render(); },
   'fechar-ed'() { S.ed = null; render(); },
   'ed-tab'(e) { S.edTab = e.v; render(); },
@@ -588,24 +676,24 @@ const A = {
     const x = S.ed; if (!x || x.kind !== 'cat') return;
     if (S.edTab === 'fixa' && x.conta) {
       if (!S.edFixa) return;
-      acao({ acao: 'CONFIRMAR_BAIXA', txId: x.id, contaId: S.edFixa, comp: S.mes, lembrar: S.lembrar }, 'Baixa registrada', () => { S.ed = null; });
-    } else acao({ acao: 'CLASSIFICAR', id: x.id, origem: x.origem, categoria: S.edCat, lembrar: S.lembrar }, 'Categoria salva', () => { S.ed = null; });
+      acao({ acao: 'CONFIRMAR_BAIXA', txId: x.id, contaId: S.edFixa, comp: S.mes, lembrar: S.lembrar }, 'Baixa registrada', { fecha: () => { S.ed = null; } });
+    } else { const cat = S.edCat; acao({ acao: 'CLASSIFICAR', id: x.id, origem: x.origem, categoria: cat, lembrar: S.lembrar }, 'Categoria salva', { otimista: () => patchClassificar(x.id, cat), fecha: () => { S.ed = null; } }); }
   },
-  'sug-ok'(e) { const g = S.d.sugestoes[+e.v]; if (g) acao({ acao: 'CONFIRMAR_BAIXA', txId: g.txId, contaId: g.contaId, comp: g.comp, lembrar: false }, 'Baixa registrada'); },
-  'sug-nao'(e) { const g = S.d.sugestoes[+e.v]; if (g) acao({ acao: 'IGNORAR_SUGESTAO', txId: g.txId }, 'Ok, não é conta fixa'); },
+  'sug-ok'(e) { const g = S.d.sugestoes[+e.v]; if (g) acao({ acao: 'CONFIRMAR_BAIXA', txId: g.txId, contaId: g.contaId, comp: g.comp, lembrar: false }, 'Baixa registrada', { otimista: () => { S.d.sugestoes.splice(+e.v, 1); } }); },
+  'sug-nao'(e) { const g = S.d.sugestoes[+e.v]; if (g) acao({ acao: 'IGNORAR_SUGESTAO', txId: g.txId }, 'Ok, não é conta fixa', { otimista: () => { S.d.sugestoes.splice(+e.v, 1); } }); },
   /* categorias */
   'abrir-cfg'() { S.cfg = true; S.sheet = ''; S.novo = false; render(); },
   'fechar-cfg'() { S.cfg = false; render(); },
   'cfg-abrir'(e) { S.cfgOpen = S.cfgOpen === e.v ? '' : e.v; render(); },
   'criar-cat'() {
     const v = S.ndraft.trim(); if (!v) return;
-    acao({ acao: 'CRIAR_CATEGORIA', nome: v }, 'Categoria criada', () => { S.ndraft = ''; S.cfgOpen = v; });
+    acao({ acao: 'CRIAR_CATEGORIA', nome: v }, 'Categoria criada', { otimista: () => { S.ndraft = ''; }, ok: () => { S.cfgOpen = v; }, falhou: () => { S.ndraft = v; } });
   },
   renomear(e) {
     const para = (S.rn[e.v] !== undefined ? S.rn[e.v] : e.v).trim(); if (!para || para === e.v) return;
-    acao({ acao: 'RENOMEAR_CATEGORIA', de: e.v, para: para }, 'Categoria renomeada', () => { delete S.rn[e.v]; S.cfgOpen = para; });
+    acao({ acao: 'RENOMEAR_CATEGORIA', de: e.v, para: para }, 'Categoria renomeada', { ok: () => { delete S.rn[e.v]; S.cfgOpen = para; } });
   },
-  'rm-regra'(e) { acao({ acao: 'REMOVER_REGRA', padrao: e.v }, 'Não vou mais reconhecer esse estabelecimento'); },
+  'rm-regra'(e) { acao({ acao: 'REMOVER_REGRA', padrao: e.v }, 'Não vou mais reconhecer esse estabelecimento', { otimista: () => { S.d.categorias.todas.forEach(c => { c.lembrados = c.lembrados.filter(m => m !== e.v); }); } }); },
   /* contas fixas */
   'abrir-fix'() { S.fix = true; S.sheet = ''; S.novo = false; S.cfg = false; render(); },
   'fechar-fix'() { S.fix = false; S.fx = null; render(); },
@@ -621,13 +709,14 @@ const A = {
   'fx-add-pal'() { const v = S.fx.novaPal.trim(); if (!v) return; if (S.fx.palavras.indexOf(v) < 0) S.fx.palavras.push(v); S.fx.novaPal = ''; render(); },
   'fx-salvar'() {
     const x = S.fx; if (!x.nome.trim()) return toast('Informe o nome da conta', true);
+    if (!(x.valor || '').trim() || !(x.dia || '').trim()) return toast('Informe o valor e o dia do vencimento', true);
     if (x.novaPal.trim() && x.palavras.indexOf(x.novaPal.trim()) < 0) x.palavras.push(x.novaPal.trim());
     const parc = x.rep === 'parc';
-    acao({ acao: 'SALVAR_FIXA', id: x.id || undefined, tipo: x.tipo, nome: x.nome, valor: x.valor, dia: x.dia, categoria: x.cat, palavras: x.palavras, repeticao: parc ? 'parcelado' : 'mensal', parcelaAtual: x.pa, parcelaTotal: x.pt, desde: x.desde, primeira: x.id ? undefined : S.mes }, 'Conta fixa salva', () => { S.fx = null; });
+    acao({ acao: 'SALVAR_FIXA', id: x.id || undefined, tipo: x.tipo, nome: x.nome, valor: x.valor, dia: x.dia, categoria: x.cat, palavras: x.palavras, repeticao: parc ? 'parcelado' : 'mensal', parcelaAtual: x.pa, parcelaTotal: x.pt, desde: x.desde, primeira: x.id ? undefined : S.mes }, 'Conta fixa salva', { fecha: () => { S.fx = null; }, falhou: () => { S.fx = x; } });
   },
   'fx-encerrar'() {
     const x = S.fx; if (!x.conf) { x.conf = true; render(); return; }
-    acao({ acao: 'ENCERRAR_FIXA', id: x.id }, 'Conta encerrada', () => { S.fx = null; });
+    acao({ acao: 'ENCERRAR_FIXA', id: x.id }, 'Conta encerrada', { fecha: () => { S.fx = null; }, falhou: () => { S.fx = x; } });
   },
   /* novo lançamento */
   'abrir-novo'() { S.novo = true; S.sheet = ''; S.cfg = false; S.nv = {}; S.nvConta = ''; render(); },
@@ -638,14 +727,23 @@ const A = {
   'nv-salvar'() {
     const n = S.nv, t = S.ntab, valor = (n.valor || '').trim();
     if (!valor) return toast('Informe o valor', true);
-    const fim = () => { S.novo = false; S.nv = {}; S.nvConta = ''; };
-    if (t === 'baixa') { if (!S.nvConta) return toast('Escolha a conta', true); return acao({ acao: 'BAIXA_DINHEIRO', contaId: S.nvConta, comp: S.mes, valor: valor }, 'Baixa registrada', fim); }
-    if (t === 'hora') return acao({ acao: 'LANCAR_DINHEIRO', tipo: 'SAIDA', valor: valor, descricao: n.desc || '', categoria: n.cat || 'Diversos' }, 'Gasto registrado', fim);
-    if (t === 'entrada') return acao({ acao: 'LANCAR_DINHEIRO', tipo: 'ENTRADA', valor: valor, descricao: n.desc || '' }, 'Entrada registrada', fim);
+    const opt = { fecha: () => { S.novo = false; }, ok: () => { S.nv = {}; S.nvConta = ''; }, falhou: () => { S.novo = true; } };
+    const num = parseFloat(valor.replace(/\./g, '').replace(',', '.'));
+    if (!(num > 0)) return toast('Valor inválido', true);
+    if (t === 'baixa') {
+      if (!S.nvConta) return toast('Escolha a conta', true);
+      if (num > S.d.numeros.carteira + 0.005) return toast('Dinheiro em mãos insuficiente. Registre antes a entrada em dinheiro.', true);
+      return acao({ acao: 'BAIXA_DINHEIRO', contaId: S.nvConta, comp: S.mes, valor: valor }, 'Baixa registrada', opt);
+    }
+    if (t === 'hora') {
+      if (num > S.d.numeros.carteira + 0.005) return toast('Dinheiro em mãos insuficiente. Registre antes a entrada em dinheiro.', true);
+      return acao({ acao: 'LANCAR_DINHEIRO', tipo: 'SAIDA', valor: valor, descricao: n.desc || '', categoria: n.cat || 'Diversos' }, 'Gasto registrado', opt);
+    }
+    if (t === 'entrada') return acao({ acao: 'LANCAR_DINHEIRO', tipo: 'ENTRADA', valor: valor, descricao: n.desc || '' }, 'Entrada registrada', opt);
     if (!(n.desc || '').trim()) return toast('Informe a descrição', true);
     if (!(n.dia || '').trim()) return toast('Informe o dia do vencimento', true);
     const parc = (n.parc || '').trim();
-    return acao({ acao: 'SALVAR_FIXA', tipo: S.ptipo === 'saida' ? 'SAIDA' : 'ENTRADA', nome: n.desc, valor: valor, dia: n.dia, categoria: n.cat || 'Diversos', palavras: [n.desc], repeticao: parc ? 'parcelado' : 'mensal', parcelaAtual: 1, parcelaTotal: parc, primeira: n.prim || S.mes }, 'Lançamento previsto salvo', fim);
+    return acao({ acao: 'SALVAR_FIXA', tipo: S.ptipo === 'saida' ? 'SAIDA' : 'ENTRADA', nome: n.desc, valor: valor, dia: n.dia, categoria: n.cat || 'Diversos', palavras: [n.desc], repeticao: parc ? 'parcelado' : 'mensal', parcelaAtual: 1, parcelaTotal: parc, primeira: n.prim || S.mes }, 'Lançamento previsto salvo', opt);
   }
 };
 document.addEventListener('click', ev => {
@@ -670,15 +768,23 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') fechaTopo();
   else if (ev.key === 'Enter' && ev.target.dataset && ev.target.dataset.in === 'tok') A.entrar();
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.token && S.d && !S.busy && !S.ed && !S.fx && !S.novo) carregar(S.mes, true); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.token && S.d && S.pend === 0) prefetch(S.mes); });
 
 /* ====================================================================
    INÍCIO: mostra o último dado salvo na hora e atualiza em seguida
    ==================================================================== */
 (function iniciar() {
-  try { const c = JSON.parse(ls.get(CHAVE_CACHE) || '{}'), ks = Object.keys(c); if (ks.length && S.token) { S.d = c[ks[ks.length - 1]]; S.mes = ''; } } catch (e) { /* cache ruim: ignora */ }
+  try {
+    const c = JSON.parse(ls.get(CHAVE_CACHE) || '{}');
+    Object.keys(c).forEach(k => { MC[k] = { d: c[k], t: 0 }; });
+    const ks = Object.keys(c);
+    if (ks.length && S.token) {
+      const atual = ks.filter(k => c[k].mes === c[k].mesAtual)[0] || ks[0];
+      S.d = c[atual]; S.meses = S.d.meses || [];             // mostra o último que viu enquanto o servidor responde
+    }
+  } catch (e) { /* cache ruim: ignora */ }
   render();
-  if (S.token) carregar(undefined, true);
+  if (S.token) buscar('').then(() => prefetch(S.mes));
 })();
 </script>
 </body>
